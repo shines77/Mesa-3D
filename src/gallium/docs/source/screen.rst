@@ -168,6 +168,8 @@ The integer capabilities:
   since they are linked) a driver can support. Returning 0 is equivalent
   to returning 1 because every driver has to support at least a single
   viewport/scissor combination.  
+* ``PIPE_CAP_RASTERIZER_LOWER_LEFT_ORIGIN``: Indicates whether the setting of
+  lower_left_origin in pipe_rasterizer_state is supported.
 
 
 .. _pipe_capf:
