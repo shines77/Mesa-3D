@@ -1329,7 +1329,6 @@ static void r600_draw_vbo(struct pipe_context *ctx, const struct pipe_draw_info 
 	struct radeon_winsys_cs *cs = rctx->rings.gfx.cs;
 
 	if (!info.count && (info.indexed || !info.count_from_stream_output)) {
-		assert(0);
 		return;
 	}
 
