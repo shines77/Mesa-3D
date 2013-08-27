@@ -2,11 +2,14 @@
 #ifndef _D3D11_DEVICECHILD_H_
 #define _D3D11_DEVICECHILD_H_
 
-#include "unknown.h"
+#include "iunknown.h"
+#include "privatedata.h"
 
 struct D3D11DeviceChild
 {
     struct D3D11Unknown base;
+    struct D3D11Device *device;
+    struct D3D11PrivateData pdata;
 };
 static INLINE struct D3D11DeviceChild *D3D11DeviceChild(void *ptr)
 {

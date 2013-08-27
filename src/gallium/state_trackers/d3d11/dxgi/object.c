@@ -24,19 +24,16 @@
 
 HRESULT
 DXGIObject_ctor( struct DXGIObject *This,
-struct D3D11UnknownParams *pParams)
+                 struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = Unknown_ctor(&This->base, pParams);
-    if (FAILED(hr))
-        return hr;
-
-    return S_OK;
+    return D3D11Unknown_ctor(&This->base, pParams);
 }
 
 void
 DXGIObject_dtor( struct DXGIObject *This )
 {
-    Unknown_dtor(&This->base);
+    D3D11PrivateData_Destroy(&This->pdata);
+    D3D11Unknown_dtor(&This->base);
 }
 
 HRESULT WINAPI
@@ -45,7 +42,7 @@ DXGIObject_SetPrivateData( struct DXGIObject *This,
                            UINT DataSize,
                            void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Set(This, Name, DataSize, pData);
 }
 
 HRESULT WINAPI
@@ -53,7 +50,7 @@ DXGIObject_SetPrivateDataInterface( struct DXGIObject *This,
                                     REFGUID Name,
                                     IUnknown *pUnknown )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_SetInterface(&This->pdata, Name, pUnknown);
 }
 
 HRESULT WINAPI
@@ -62,7 +59,7 @@ DXGIObject_GetPrivateData( struct DXGIObject *This,
                            UINT *pDataSize,
                            void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Get(&This->pdata, Name, pDataSize, pData);
 }
 
 HRESULT WINAPI
@@ -70,7 +67,7 @@ DXGIObject_GetParent( struct DXGIObject *This,
                       REFIID riid,
                       void **ppParent )
 {
-    STUB_return(E_NOTIMPL);
+    return D3DUnknown_QueryInterface(This->parent, riid, ppParent);
 }
 
 IDXGIObjectVtbl DXGIObject_vtable = {
@@ -90,8 +87,7 @@ static const GUID *DXGIObject_IIDs[] = {
 };
 
 HRESULT
-DXGIObject_new( struct D3D11Device *pDevice,
-struct DXGIObject **ppOut )
+DXGIObject_new( struct DXGIObject **ppOut )
 {
     D3D11_NEW(DXGIObject, ppOut, pDevice);
 }

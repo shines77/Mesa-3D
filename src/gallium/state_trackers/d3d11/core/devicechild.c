@@ -24,9 +24,9 @@
 
 HRESULT
 D3D11DeviceChild_ctor( struct D3D11DeviceChild *This,
-struct D3D11UnknownParams *pParams)
+                       struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = Unknown_ctor(&This->base, pParams);
+    HRESULT hr = D3D11Unknown_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
 
@@ -36,14 +36,15 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11DeviceChild_dtor( struct D3D11DeviceChild *This )
 {
-    Unknown_dtor(&This->base);
+    D3D11PrivateData_Destroy(&This->pdata);
+    D3D11Unknown_dtor(&This->base);
 }
 
 void WINAPI
 D3D11DeviceChild_GetDevice( struct D3D11DeviceChild *This,
                             ID3D11Device **ppDevice )
 {
-    STUB();
+    com_ref(ppDevice, This->device);
 }
 
 HRESULT WINAPI
@@ -52,7 +53,7 @@ D3D11DeviceChild_GetPrivateData( struct D3D11DeviceChild *This,
                                  UINT *pDataSize,
                                  void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Get(&This->pdata, guid, pDataSize, pData);
 }
 
 HRESULT WINAPI
@@ -61,7 +62,7 @@ D3D11DeviceChild_SetPrivateData( struct D3D11DeviceChild *This,
                                  UINT DataSize,
                                  void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Set(&This->pdata, guid, pDataSize, pData);
 }
 
 HRESULT WINAPI
@@ -69,9 +70,10 @@ D3D11DeviceChild_SetPrivateDataInterface( struct D3D11DeviceChild *This,
                                           REFGUID guid,
                                           IUnknown *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_SetInterface(&This->pdata, guid, pData);
 }
 
+#if 0
 ID3D11DeviceChildVtbl D3D11DeviceChild_vtable = {
     (void *)D3D11Unknown_QueryInterface,
     (void *)D3D11Unknown_AddRef,
@@ -94,4 +96,4 @@ struct D3D11DeviceChild **ppOut )
 {
     D3D11_NEW(D3D11DeviceChild, ppOut, pDevice);
 }
-
+#endif

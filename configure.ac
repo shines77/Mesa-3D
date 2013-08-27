@@ -608,7 +608,7 @@ AC_ARG_ENABLE([gbm],
    [enable_gbm=auto])
 AC_ARG_ENABLE([nine],
     [AS_HELP_STRING([--enable-nine],
-        [enable build of the nine Direct3D9 API @<:@default=no@:>@])],
+        [enable build of the nine Direct3D9 and Direct3D11 APIs @<:@default=no@:>@])],
     [enable_nine="$enableval"],
     [enable_nine=no])
 
@@ -1286,7 +1286,7 @@ if test "x$enable_nine" = xyes; then
         AC_MSG_ERROR([cannot enable nine without Gallium])
     fi
 
-    GALLIUM_STATE_TRACKERS_DIRS="$GALLIUM_STATE_TRACKERS_DIRS nine"
+    GALLIUM_STATE_TRACKERS_DIRS="$GALLIUM_STATE_TRACKERS_DIRS nine d3d11"
     GALLIUM_TARGET_DIRS="$GALLIUM_TARGET_DIRS d3dadapter9"
 
     dnl d3dadapter9 requires pipe-loader
@@ -2072,6 +2072,7 @@ AC_CONFIG_FILES([Makefile
 		src/gallium/drivers/trace/Makefile
 		src/gallium/state_trackers/Makefile
 		src/gallium/state_trackers/clover/Makefile
+		src/gallium/state_trackers/d3d11/Makefile
 		src/gallium/state_trackers/dri/Makefile
 		src/gallium/state_trackers/dri/drm/Makefile
 		src/gallium/state_trackers/dri/sw/Makefile

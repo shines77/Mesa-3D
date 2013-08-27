@@ -3,10 +3,13 @@
 #define _DXGI_OBJECT_H_
 
 #include "unknown.h"
+#include "privatedata.h"
 
 struct DXGIObject
 {
     struct D3D11Unknown base;
+    struct D3D11Unknown *parent;
+    struct D3D11PrivateData pdata;
 };
 static INLINE struct DXGIObject *DXGIObject(void *ptr)
 {
