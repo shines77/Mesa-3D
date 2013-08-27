@@ -22,21 +22,11 @@
 
 #include "privatedata.h"
 
-void WINAPI
-D3D11PrivateDatae_GetDevice( struct D3D11PrivateData *This,
-                             ID3D11Device **ppDevice )
+struct pdata_header
 {
-   assert_pointer(ppDevice);
-   D3D11Unknown_AddRef(This->device);
-   *ppDevice = (ID3D11Device *)This->device;
-}
-
-
-struct privdata_header
-{
-    boolean is_iunk;
+    BOOL is_iunk;
     UINT size;
-    char data[0];
+    BYTE data[0];
 };
 
 static int
@@ -59,7 +49,7 @@ ht_guid_hash(void *key)
 static enum pipe_error
 ht_guid_delete(void *key, void *value, void *data)
 {
-    struct privdata_header *pdh = value;
+    struct pdata_header *pdh = value;
 
     if (pdh->is_iunk)
         IUnknown_Release(*(IUnknown **)pdh->data);
@@ -70,8 +60,8 @@ ht_guid_delete(void *key, void *value, void *data)
 
 static HRESULT
 D3D11PrivateData_Free( struct D3D11PrivateData *This,
-                                  REFGUID guid,
-                                  struct privdata_header *pdh )
+                       REFGUID guid,
+                       struct pdata_header *pdh )
 {
     if (!pdh && likely(This->pdata))
         pdh = util_hash_table_get(This->pdata, guid);
@@ -92,7 +82,7 @@ D3D11PrivateData_Get( struct D3D11PrivateData *This,
                                  UINT *pDataSize,
                                  void *pData )
 {
-    const struct privdata_header *pdh;
+    const struct pdata_header *pdh;
 
     user_assert(pDataSize, E_INVALIDARG);
 
@@ -126,7 +116,7 @@ D3D11PrivateData_Set( struct D3D11PrivateData *This,
                                  UINT DataSize,
                                  const void *pData )
 {
-    struct privdata_header *pdh;
+    struct pdata_header *pdh;
 
     if (!pData)
         return D3D11PrivateData_Free(This, guid);
@@ -141,7 +131,7 @@ D3D11PrivateData_Set( struct D3D11PrivateData *This,
         if (pdh)
             D3D11PrivateData_Free(This, NULL, pdh);
 
-        pdh = CALLOC_VARIANT_LENGTH_STRUCT(privdata_header, DataSize);
+        pdh = CALLOC_VARIANT_LENGTH_STRUCT(pdata_header, DataSize);
         if (!pdh)
             return_error(E_OUTOFMEMORY);
 
@@ -168,7 +158,7 @@ D3D11PrivateData_SetPrivateDataInterface( struct D3D11PrivateData *This,
                                           REFGUID guid,
                                           const IUnknown *pData )
 {
-    struct privdata_header *pdh;
+    struct pdata_header *pdh;
 
     if (!pData)
         return D3D11PrivateData_Free(This, guid);
@@ -183,7 +173,7 @@ D3D11PrivateData_SetPrivateDataInterface( struct D3D11PrivateData *This,
         if (pdh)
             D3D11PrivateData_Free(This, NULL, pdh);
 
-        pdh = CALLOC_VARIANT_LENGTH_STRUCT(privdata_header, sizeof(pData));
+        pdh = CALLOC_VARIANT_LENGTH_STRUCT(pdata_header, sizeof(pData));
         if (!pdh)
             return_error(E_OUTOFMEMORY);
 

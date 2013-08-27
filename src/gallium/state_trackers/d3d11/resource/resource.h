@@ -7,6 +7,10 @@
 struct D3D11Resource
 {
     struct D3D11DeviceChild base;
+
+    struct pipe_resource *resource;
+    UINT lod;
+    UINT eviction_priority;
 };
 static INLINE struct D3D11Resource *D3D11Resource(void *ptr)
 {
@@ -14,11 +18,9 @@ static INLINE struct D3D11Resource *D3D11Resource(void *ptr)
 }
 
 HRESULT
-D3D11Resource_new( struct D3D11Device *, struct D3D11Resource **ppOut );
-
-void WINAPI
-D3D11Resource_GetType( struct D3D11Resource *This,
-                       D3D11_RESOURCE_DIMENSION *pResourceDimension );
+D3D11Resource_ctor( struct D3D11Resource *This );
+void
+D3D11Resource_dtor( struct D3D11Resource *This );
 
 void WINAPI
 D3D11Resource_SetEvictionPriority( struct D3D11Resource *This,

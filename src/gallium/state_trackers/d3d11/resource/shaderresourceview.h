@@ -7,6 +7,8 @@
 struct D3D11ShaderResourceView
 {
     struct D3D11View base;
+    struct pipe_sampler_view *sv;
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc;
 };
 static INLINE struct D3D11ShaderResourceView *D3D11ShaderResourceView(void *ptr)
 {

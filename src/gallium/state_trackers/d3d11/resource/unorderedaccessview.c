@@ -24,9 +24,84 @@
 
 HRESULT
 D3D11UnorderedAccessView_ctor( struct D3D11UnorderedAccessView *This,
-struct D3D11UnknownParams *pParams)
+                               struct D3D11Resource *pResource,
+                               onst D3D11_UNORDERED_ACCESS_VIEW_DESC *pDesc,
+                               struct D3D11UnknownParams *pParams)
 {
-    HRESULT hr = D3D11View_ctor(&This->base, pParams);
+    struct pipe_context *pipe = pParams->device->pipe;
+    struct pipe_resource *res = pResource->resource;
+    struct pipe_surface templ;
+    HRESULT hr;
+
+    user_assert(res->bind & PIPE_BIND_SHADER_RESOURCE, D3DERR_INVALIDCALL);
+
+    memset(&templ, 0, sizeof(templ));
+
+    if (!pDesc) {
+        This->desc.Format = pipe_to_dxgi_format(res->format);
+        switch (res->target) {
+        case PIPE_TEXTURE_1D:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
+            break;
+        case PIPE_TEXTURE_1D_ARRAY:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1DARRAY;
+            This->desc.Texture2DArray.ArraySize = res->array_size;
+            break;
+        case PIPE_TEXTURE_2D:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+            break;
+        case PIPE_TEXTURE_2D_ARRAY:
+        case PIPE_TEXTURE_CUBE:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+            This->desc.Texture2DArray.ArraySize = res->array_size;
+            break;
+        case PIPE_TEXTURE_3D:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+            This->desc.Texture3D.WSize = res->depth0;
+            break;
+        case PIPE_BUFFER:
+            This->desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+            This->desc.Buffer.NumElements =
+                res->width0 / util_format_get_blocksize(res->format);
+            break;
+        }
+    } else {
+        This->desc = *pDesc;
+    }
+    pDesc = &This->desc;
+
+    templ.format = dxgi_to_pipe_format(pDesc->Format);
+    templ.writable = 1;
+    switch (pDesc->ViewDimension) {
+    case D3D11_UAV_DIMENSION_BUFFER:
+        user_assert(!(pDesc->Buffer.Flags & D3D11_BUFFER_UAV_FLAG_RAW) ||
+                    pDesc->Format == DXGI_FORMAT_R32_TYPELESS, E_INVALIDARG);
+        templ.u.buf.first_element = pDesc->Buffer.FirstElement;
+        templ.u.buf.last_element =
+            pDesc->Buffer.FirstElement + pDesc->Buffer.NumElements - 1;
+        break;
+    case D3D11_UAV_DIMENSION_TEXTURE1D:
+    case D3D11_UAV_DIMENSION_TEXTURE2D:
+        templ.u.tex.level = pDesc->Texture1D.MipSlice;
+        break;
+    case D3D11_UAV_DIMENSION_TEXTURE1DARRAY:
+    case D3D11_UAV_DIMENSION_TEXTURE2DARRAY:
+        templ.u.tex.level = pDesc->Texture1DArray.MipSlice;
+        templ.u.tex.first_layer = pDesc->Texture1DArray.FirstArraySlice;
+        templ.u.tex.last_layer = pDesc->Texture1DArray.FirstArraySlice +
+            pDesc->Texture1DArray.ArraySize - 1;
+        break;
+    case D3D11_UAV_DIMENSION_TEXTURE3D:
+        templ.u.tex.level = pDesc->Texture3D.MipSlice;
+        templ.u.tex.first_layer = pDesc->Texture3D.FirstWSlice;
+        templ.u.tex.last_layer =
+            pDesc->Texture3D.FirstWSlice + pDesc->Texture3D.WSize - 1;
+        break;
+    default:
+        return_error(E_INVALIDARG);
+    }
+
+    hr = D3D11View_ctor(&This->base, pParams, pResource);
     if (FAILED(hr))
         return hr;
 
@@ -36,6 +111,7 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11UnorderedAccessView_dtor( struct D3D11UnorderedAccessView *This )
 {
+    pipe_surface_reference(&This->surface, NULL);
     D3D11View_dtor(&This->base);
 }
 
@@ -43,7 +119,8 @@ void WINAPI
 D3D11UnorderedAccessView_GetDesc( struct D3D11UnorderedAccessView *This,
                                   D3D11_UNORDERED_ACCESS_VIEW_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 ID3D11UnorderedAccessViewVtbl D3D11UnorderedAccessView_vtable = {

@@ -7,6 +7,7 @@
 struct D3D11Texture2D
 {
     struct D3D11Resource base;
+    D3D11_TEXTURE2D_DESC desc;
 };
 static INLINE struct D3D11Texture2D *D3D11Texture2D(void *ptr)
 {
@@ -14,7 +15,9 @@ static INLINE struct D3D11Texture2D *D3D11Texture2D(void *ptr)
 }
 
 HRESULT
-D3D11Texture2D_new( struct D3D11Device *, struct D3D11Texture2D **ppOut );
+D3D11Texture2D_new( struct D3D11Device *,
+                    const D3D11_TEXTURE2D_DESC *pDesc,
+                    struct D3D11Texture2D **ppOut );
 
 void WINAPI
 D3D11Texture2D_GetDesc( struct D3D11Texture2D *This,

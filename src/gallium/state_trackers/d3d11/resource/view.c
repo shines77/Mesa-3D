@@ -24,18 +24,20 @@
 
 HRESULT
 D3D11View_ctor( struct D3D11View *This,
-struct D3D11UnknownParams *pParams)
+                struct D3D11UnknownParams *pParams,
+                struct D3D11Resource *pResource )
 {
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
-
+    com_ref(&This->resource, pResource);
     return S_OK;
 }
 
 void
 D3D11View_dtor( struct D3D11View *This )
 {
+    com_ref(&This->resource, NULL);
     D3D11DeviceChild_dtor(&This->base);
 }
 
@@ -43,31 +45,7 @@ void WINAPI
 D3D11View_GetResource( struct D3D11View *This,
                        ID3D11Resource **ppResource )
 {
-    STUB();
-}
-
-ID3D11ViewVtbl D3D11View_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)D3D11DeviceChild_GetDevice,
-    (void *)D3D11DeviceChild_GetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateDataInterface,
-    (void *)D3D11View_GetResource
-};
-
-static const GUID *D3D11View_IIDs[] = {
-    &IID_ID3D11View,
-    &IID_ID3D11DeviceChild,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-D3D11View_new( struct D3D11Device *pDevice,
-struct D3D11View **ppOut )
-{
-    D3D11_NEW(D3D11View, ppOut, pDevice);
+    assert(ppResource);
+    com_ref(ppResource, This->resource);
 }
 

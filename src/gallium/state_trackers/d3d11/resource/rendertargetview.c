@@ -24,9 +24,83 @@
 
 HRESULT
 D3D11RenderTargetView_ctor( struct D3D11RenderTargetView *This,
-struct D3D11UnknownParams *pParams)
+                            struct D3D11UnknownParams *pParams,
+                            struct D3D11Resource *pResource,
+                            const D3D11_RENDER_TARGET_VIEW_DESC *pDesc )
 {
-    HRESULT hr = D3D11View_ctor(&This->base, pParams);
+    struct pipe_context *pipe = pParams->device->pipe;
+    struct pipe_resource *res;
+    struct pipe_surface templ;
+    HRESULT hr;
+
+    res = pResource->resource;
+    user_assert(res->bind & PIPE_BIND_RENDER_TARGET, D3DERR_INVALIDCALL);
+
+    memset(&templ, 0, sizeof(templ));
+    if (pDesc) {
+        templ.format = d3d11_to_pipe_format(pDesc->Format);
+        switch (pDesc->ViewDimension) {
+        case D3D11_RTV_DIMENSION_TEXTURE1D:
+        case D3D11_RTV_DIMENSION_TEXTURE2D:
+            user_assert(res->target == PIPE_TEXTURE_1D ||
+                        res->target == PIPE_TEXTURE_2D, E_INVALIDARG);
+            templ.u.tex.level = pDesc->Texture1D.MipSlice;
+            break;
+        case D3D11_RTV_DIMENSION_TEXTURE3D:
+            user_assert(res->target == PIPE_TEXTURE_3D, E_INVALIDARG);
+            templ.u.tex.level = pDesc->Texture3D.MipSlice;
+            templ.u.tex.first_layer = pDesc->Texture3D.FirstWSlice;
+            templ.u.tex.last_layer =
+                pDesc->Texture3D.FirstWSlice + pDesc->Texture3D.WSize - 1;
+            break;
+        case D3D11_RTV_DIMENSION_TEXTURE1DARRAY:
+        case D3D11_RTV_DIMENSION_TEXTURE2DARRAY:
+            user_assert(res->target == PIPE_TEXTURE_1D ||
+                        res->target == PIPE_TEXTURE_1D_ARRAY ||
+                        res->target == PIPE_TEXTURE_2D
+                        res->target == PIPE_TEXTURE_2D_ARRAY, E_INVALIDARG);
+            templ.u.tex.level = pDesc->Texture1DArray.MipSlice;
+            templ.u.tex.first_layer = pDesc->Texture1DArray.FirstArraylice;
+            templ.u.tex.last_layer = pDesc->Texture1DArray.FirstArraySlice +
+                pDesc->Texture1DArray.ArraySize - 1;
+            break;
+        case D3D11_RTV_DIMENSION_BUFFER:
+            user_assert(res->target == PIPE_BUFFER, E_INVALIDARG);
+            user_assert(pDesc->Buffer.ElementWidth > 0 &&
+                        pDesc->Buffer.ElementWidth <= 65536, E_INVALIDARG);
+            templ.u.buf.first_element = pDesc->Buffer.ElementOffset;
+            templ.u.buf.last_element =
+                pDesc->Buffer.ElementOffset + pDesc->Buffer.ElementWidth - 1;
+            break;
+        case D3D11_RTV_DIMENSION_TEXTURE2DMS:
+            user_assert(res->target == PIPE_TEXTURE_2D, E_INVALIDARG);
+            break;
+        case D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY:
+            user_assert(res->target == PIPE_TEXTURE_2D_ARRAY, E_INVALIDARG);
+            templ.u.tex.first_layer = pDesc->Texture2DMSArray.FirstArraySlice;
+            templ.u.tex.last_layer = pDesc->Texture2DMSArray.FirstArraySlice +
+                pDesc->Texture2DMSArray.ArraySize - 1;
+            break;
+        default:
+            return_error(E_INVALIDARG);
+        }
+    } else {
+        templ.format = res->format;
+        if (res->target == PIPE_BUFFER) {
+            templ.u.tex.last_element =
+                res->width0 / util_format_get_blocksize(res->format) - 1;
+        } else {
+            templ.u.tex.last_layer = MAX2(res->array_size, res->depth0) - 1;
+        }
+    }
+
+    This->surface = pipe->create_surface(pipe, res, &templ);
+    if (!This->surface)
+        return_error(D3DERR_DRIVERINTERNALERROR);
+
+    This->desc = *pDesc;
+
+    hr = D3D11View_ctor(&This->base, pParams, pResource);
     if (FAILED(hr))
         return hr;
 
@@ -36,6 +110,7 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11RenderTargetView_dtor( struct D3D11RenderTargetView *This )
 {
+    pipe_surface_reference(&This->surface, NULL);
     D3D11View_dtor(&This->base);
 }
 
@@ -43,7 +118,8 @@ void WINAPI
 D3D11RenderTargetView_GetDesc( struct D3D11RenderTargetView *This,
                                D3D11_RENDER_TARGET_VIEW_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 ID3D11RenderTargetViewVtbl D3D11RenderTargetView_vtable = {

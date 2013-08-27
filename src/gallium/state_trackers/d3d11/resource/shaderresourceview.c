@@ -24,9 +24,15 @@
 
 HRESULT
 D3D11ShaderResourceView_ctor( struct D3D11ShaderResourceView *This,
-struct D3D11UnknownParams *pParams)
+                              struct D3D11UnknownParams *pParams,
+                              struct D3D11Resource *pResource,
+                              const D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc )
 {
-    HRESULT hr = D3D11View_ctor(&This->base, pParams);
+    HRESULT hr;
+
+    This->desc = *pDesc;
+
+    hr = D3D11View_ctor(&This->base, pParams, pResource);
     if (FAILED(hr))
         return hr;
 
@@ -36,6 +42,7 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11ShaderResourceView_dtor( struct D3D11ShaderResourceView *This )
 {
+    pipe_sampler_view_reference(&This->sv, NULL);
     D3D11View_dtor(&This->base);
 }
 
@@ -43,7 +50,8 @@ void WINAPI
 D3D11ShaderResourceView_GetDesc( struct D3D11ShaderResourceView *This,
                                  D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 ID3D11ShaderResourceViewVtbl D3D11ShaderResourceView_vtable = {

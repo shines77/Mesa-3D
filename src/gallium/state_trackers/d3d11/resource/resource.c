@@ -24,7 +24,7 @@
 
 HRESULT
 D3D11Resource_ctor( struct D3D11Resource *This,
-struct D3D11UnknownParams *pParams)
+                    struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
@@ -36,53 +36,20 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11Resource_dtor( struct D3D11Resource *This )
 {
-    D3D11DeviceChild_dtor(&This->base);
-}
+    pipe_resource_reference(&This->resource, NULL);
 
-void WINAPI
-D3D11Resource_GetType( struct D3D11Resource *This,
-                       D3D11_RESOURCE_DIMENSION *pResourceDimension )
-{
-    STUB();
+    D3D11DeviceChild_dtor(&This->base);
 }
 
 void WINAPI
 D3D11Resource_SetEvictionPriority( struct D3D11Resource *This,
                                    UINT EvictionPriority )
 {
-    STUB();
+    This->eviction_priority = EvictionPriority;
 }
 
 UINT WINAPI
 D3D11Resource_GetEvictionPriority( struct D3D11Resource *This )
 {
-    STUB_return(0);
+    return This->eviction_priority;
 }
-
-ID3D11ResourceVtbl D3D11Resource_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)D3D11DeviceChild_GetDevice,
-    (void *)D3D11DeviceChild_GetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateDataInterface,
-    (void *)D3D11Resource_GetType,
-    (void *)D3D11Resource_SetEvictionPriority,
-    (void *)D3D11Resource_GetEvictionPriority
-};
-
-static const GUID *D3D11Resource_IIDs[] = {
-    &IID_ID3D11Resource,
-    &IID_ID3D11DeviceChild,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-D3D11Resource_new( struct D3D11Device *pDevice,
-struct D3D11Resource **ppOut )
-{
-    D3D11_NEW(D3D11Resource, ppOut, pDevice);
-}
-

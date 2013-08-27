@@ -24,11 +24,38 @@
 
 HRESULT
 D3D11Buffer_ctor( struct D3D11Buffer *This,
-struct D3D11UnknownParams *pParams)
+                  struct D3D11UnknownParams *pParams,
+                  const D3D11_BUFFER_DESC *pDesc )
 {
-    HRESULT hr = D3D11Resource_ctor(&This->base, pParams);
+    struct pipe_screen *screen = pParams->device->screen;
+    struct pipe_resource templ;
+    HRESULT hr;
+
+    user_assert(pDesc->ByteWidth, D3DERR_INVALIDCALL);
+
+    templ.target = PIPE_BUFFER;
+    templ.format = PIPE_FORMAT_R8_UNORM;
+    templ.width0 = pDesc->ByteWidth;
+    templ.height0 = 1;
+    templ.depth0 = 1;
+    templ.array_size = 1;
+    templ.last_level = 0;
+    templ.nr_samples = 0;
+    templ.usage = d3d11_to_pipe_usage(pDesc->Usage);
+    templ.bind = d3d11_usage_to_pipe_bind(pDesc->Usage) |
+        d3d11_to_pipe_bind(pDesc->BindFlags) |
+        d3d11_cpu_access_flags_to_pipe_bind(pDesc->CPUAccessFlags) |
+        d3d11_misc_flags_to_pipe_bind(pDesc->MiscFlags);
+    templ.flags = 0;
+
+    This->base.resource = screen->resource_create(screen, &templ);
+    if (!This->base.resource)
+        return_error(D3DERR_OUTOFVIDEOMEMORY);
+
+    hr = D3D11Resource_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+    This->desc = *pDesc;
 
     return S_OK;
 }
@@ -39,11 +66,20 @@ D3D11Buffer_dtor( struct D3D11Buffer *This )
     D3D11Resource_dtor(&This->base);
 }
 
+static void WINAPI
+D3D11Resource_GetType( struct D3D11Resource *This,
+                       D3D11_RESOURCE_DIMENSION *pResourceDimension )
+{
+    assert(pResourceDimension);
+    *pResourceDimension = D3D11_RESOURCE_DIMENSION_BUFFER;
+}
+
 void WINAPI
 D3D11Buffer_GetDesc( struct D3D11Buffer *This,
                      D3D11_BUFFER_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 ID3D11BufferVtbl D3D11Buffer_vtable = {

@@ -7,6 +7,7 @@
 struct D3D11Buffer
 {
     struct D3D11Resource base;
+    D3D11_BUFFER_DESC desc;
 };
 static INLINE struct D3D11Buffer *D3D11Buffer(void *ptr)
 {

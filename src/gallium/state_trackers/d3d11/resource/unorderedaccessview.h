@@ -7,6 +7,8 @@
 struct D3D11UnorderedAccessView
 {
     struct D3D11View base;
+    struct pipe_surface *surface;
+    D3D11_UNORDERED_ACCESS_VIEW_DESC desc;
 };
 static INLINE struct D3D11UnorderedAccessView *D3D11UnorderedAccessView(void *ptr)
 {

@@ -7,6 +7,8 @@
 struct D3D11DepthStencilView
 {
     struct D3D11View base;
+    struct pipe_surface *surface;
+    D3D11_DEPTH_STENCIL_VIEW_DESC desc;
 };
 static INLINE struct D3D11DepthStencilView *D3D11DepthStencilView(void *ptr)
 {

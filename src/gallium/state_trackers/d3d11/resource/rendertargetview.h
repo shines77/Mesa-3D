@@ -7,6 +7,8 @@
 struct D3D11RenderTargetView
 {
     struct D3D11View base;
+    struct pipe_surface *surface;
+    D3D11_RENDER_TARGET_VIEW_DESC desc;
 };
 static INLINE struct D3D11RenderTargetView *D3D11RenderTargetView(void *ptr)
 {

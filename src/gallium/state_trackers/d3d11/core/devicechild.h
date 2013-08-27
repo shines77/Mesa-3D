@@ -17,6 +17,11 @@ static INLINE struct D3D11DeviceChild *D3D11DeviceChild(void *ptr)
 }
 
 HRESULT
+D3D11DeviceChild_ctor( struct D3D11DeviceChild *This );
+void
+D3D11DeviceChild_dtor( struct D3D11DeviceChild *This );
+
+HRESULT
 D3D11DeviceChild_new( struct D3D11Device *, struct D3D11DeviceChild **ppOut );
 
 void WINAPI
