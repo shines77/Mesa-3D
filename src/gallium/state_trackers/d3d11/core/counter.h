@@ -7,6 +7,7 @@
 struct D3D11Counter
 {
     struct D3D11Asynchronous base;
+    D3D11_COUNTER_DESC desc;
 };
 static INLINE struct D3D11Counter *D3D11Counter(void *ptr)
 {

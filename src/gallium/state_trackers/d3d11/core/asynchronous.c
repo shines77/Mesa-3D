@@ -24,12 +24,11 @@
 
 HRESULT
 D3D11Asynchronous_ctor( struct D3D11Asynchronous *This,
-struct D3D11UnknownParams *pParams)
+                        struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
-
     return S_OK;
 }
 
@@ -42,31 +41,37 @@ D3D11Asynchronous_dtor( struct D3D11Asynchronous *This )
 UINT WINAPI
 D3D11Asynchronous_GetDataSize( struct D3D11Asynchronous *This )
 {
-    STUB_return(0);
+    return This->data_size;
 }
 
-ID3D11AsynchronousVtbl D3D11Asynchronous_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)D3D11DeviceChild_GetDevice,
-    (void *)D3D11DeviceChild_GetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateDataInterface,
-    (void *)D3D11Asynchronous_GetDataSize
-};
-
-static const GUID *D3D11Asynchronous_IIDs[] = {
-    &IID_ID3D11Asynchronous,
-    &IID_ID3D11DeviceChild,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-D3D11Asynchronous_new( struct D3D11Device *pDevice,
-struct D3D11Asynchronous **ppOut )
+void WINAPI
+D3D11DeviceContext_Begin( struct D3D11DeviceContext *This,
+                          ID3D11Asynchronous *pAsync )
 {
-    D3D11_NEW(D3D11Asynchronous, ppOut, pDevice);
+    struct D3D11Asynchronous *async = D3D11Asynchronous(pAsync);
+    if (!async->is_instant)
+        This->pipe->begin_query(This->pipe, async->pq);
 }
 
+void WINAPI
+D3D11DeviceContext_End( struct D3D11DeviceContext *This,
+                        ID3D11Asynchronous *pAsync )
+{
+    struct D3D11Asynchronous *async = D3D11Asynchronous(pAsync);
+    This->pipe->end_query(This->pipe, async->pq);
+}
+
+HRESULT WINAPI
+D3D11DeviceContext_GetData( struct D3D11DeviceContext *This,
+                            ID3D11Asynchronous *pAsync,
+                            void *pData,
+                            UINT DataSize,
+                            UINT GetDataFlags )
+{
+    struct D3D11Asynchronous *async = D3D11QueryAsynchronous(pAsync);
+    if (async->is_query)
+        return D3D11Query_GetData(D3D11Query(async), This, pData, DataSize, GetDataFlags);
+    if (async->is_counter)
+        return D3D11Counter_GetData(D3D11Counter(async), This, pData, DataSize, GetDataFlags);
+    return_error(E_INVALIDARG);
+}

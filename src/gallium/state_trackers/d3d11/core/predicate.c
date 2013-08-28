@@ -24,12 +24,13 @@
 
 HRESULT
 D3D11Predicate_ctor( struct D3D11Predicate *This,
-struct D3D11UnknownParams *pParams)
+                     struct D3D11UnknownParams *pParams,
+                     const D3D11_QUERY_DESC *pDesc )
 {
     HRESULT hr = D3D11Query_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
-
+    This->base.base.is_predicate = TRUE;
     return S_OK;
 }
 
@@ -62,8 +63,27 @@ static const GUID *D3D11Predicate_IIDs[] = {
 
 HRESULT
 D3D11Predicate_new( struct D3D11Device *pDevice,
-struct D3D11Predicate **ppOut )
+                    const D3D11_QUERY_DESC *pDesc,
+                    struct D3D11Predicate **ppOut )
 {
-    D3D11_NEW(D3D11Predicate, ppOut, pDevice);
+    D3D11_NEW(D3D11Predicate, ppOut, pDevice, pDesc);
 }
 
+
+void WINAPI
+D3D11DeviceContext_SetPredication( struct D3D11DeviceContext *This,
+                                   ID3D11Predicate *pPredicate,
+                                   BOOL PredicateValue )
+{
+    struct D3D11Query *query = &D3D11Predicate(pPredicate)->base;
+    unsigned mode;
+
+    if (!query->base.is_predicate)
+        return;
+
+    mode = PIPE_RENDER_COND_BY_REGION_WAIT;
+    if (query->desc.MiscFlags & D3D11_QUERY_MISC_PREDICATEHINT)
+        mode = PIPE_RENDER_COND_BY_REGION_NO_WAIT;
+
+    This->pipe->render_condition(This->pipq, async->pq, PredicateValue, mode);
+}

@@ -29,7 +29,7 @@ struct D3D11UnknownParams *pParams)
     HRESULT hr = D3D11Asynchronous_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
-
+    This->base.is_counter = TRUE;
     return S_OK;
 }
 
@@ -43,7 +43,8 @@ void WINAPI
 D3D11Counter_GetDesc( struct D3D11Counter *This,
                       D3D11_COUNTER_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 ID3D11CounterVtbl D3D11Counter_vtable = {
@@ -73,3 +74,25 @@ struct D3D11Counter **ppOut )
     D3D11_NEW(D3D11Counter, ppOut, pDevice);
 }
 
+
+HRESULT
+D3D11Counter_GetData( struct D3D11Counter *This,
+                      struct D3D11DeviceContext *pContext,
+                      void *pData,
+                      UINT DataSize,
+                      UINT GetDataFlags )
+{
+    struct pipe_context *pipe = pContext->pipe;
+    boolean ret;
+
+    if (!This->pipe->get_query_result(This->pipe, async->pq))
+        return S_FAIL;
+
+    switch (query->desc.Query) {
+        
+    }
+
+    memcpy(pData, &uresult, DataSize);
+
+    return S_OK;
+}

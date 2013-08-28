@@ -7,6 +7,7 @@
 struct D3D11Query
 {
     struct D3D11Asynchronous base;
+    struct D3D11_QUERY_DESC desc;
 };
 static INLINE struct D3D11Query *D3D11Query(void *ptr)
 {
@@ -14,7 +15,9 @@ static INLINE struct D3D11Query *D3D11Query(void *ptr)
 }
 
 HRESULT
-D3D11Query_new( struct D3D11Device *, struct D3D11Query **ppOut );
+D3D11Query_new( struct D3D11Device *,
+                const D3D11_QUERY_DESC *pDesc,
+                struct D3D11Query **ppOut );
 
 void WINAPI
 D3D11Query_GetDesc( struct D3D11Query *This,
