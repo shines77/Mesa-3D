@@ -30,6 +30,19 @@ struct D3D11UnknownParams *pParams)
     if (FAILED(hr))
         return hr;
 
+    hr = D3D11DeviceInit_BlendState(This);
+    if (FAILED(hr))
+        return hr;
+    hr = D3D11DeviceInit_DepthStencilState(This);
+    if (FAILED(hr))
+        return hr;
+    hr = D3D11DeviceInit_RasterizerState(This);
+    if (FAILED(hr))
+        return hr;
+    hr = D3D11DeviceInit_SamplerState(This);
+    if (FAILED(hr))
+        return hr;
+
     return S_OK;
 }
 
@@ -209,7 +222,26 @@ D3D11Device_CreateBlendState( struct D3D11Device *This,
                               D3D11_BLEND_DESC *pBlendStateDesc,
                               ID3D11BlendState **ppBlendState )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11BlendState *bs;
+    HRESULT hr;
+
+    if (unlikely(!pBlendStateDesc)) {
+        com_set(ppBlendState, This->bs_default);
+        return S_OK;
+    }
+
+    bs = util_hash_table_get(This->ht_bs, pBlendStateDesc);
+    if (!bs) {
+        if (This->bs_count >= D3D11_MAX_UNIQUE_STATE_OBJECT_COUNT)
+            return_error(D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS);
+
+        hr = D3D11BlendState_new(This, pBlendStateDesc, &bs);
+        if (FAILED(hr))
+            return_error(hr);
+    }
+    com_set(ppBlendState, bs);
+
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -217,7 +249,26 @@ D3D11Device_CreateDepthStencilState( struct D3D11Device *This,
                                      D3D11_DEPTH_STENCIL_DESC *pDepthStencilDesc,
                                      ID3D11DepthStencilState **ppDepthStencilState )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11DepthStancilState *ds;
+    HRESULT hr;
+
+    if (unlikely(!pDepthStencilDesc)) {
+        com_set(ppDepthStencilState, This->ds_default);
+        return S_OK;
+    }
+
+    ds = util_hash_table_get(This->ht_ds, pDepthStencilDesc);
+    if (!ds) {
+        if (This->ds_count >= D3D11_MAX_UNIQUE_STATE_OBJECT_COUNT)
+            return_error(D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS);
+
+        hr = D3D11DepthStencilState_new(This, pDepthStencilDesc, &ds);
+        if (FAILED(hr))
+            return_error(hr);
+    }
+    com_set(ppDepthStencilState, ds);
+
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -225,7 +276,26 @@ D3D11Device_CreateRasterizerState( struct D3D11Device *This,
                                    D3D11_RASTERIZER_DESC *pRasterizerDesc,
                                    ID3D11RasterizerState **ppRasterizerState )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11RasterizerState *rs;
+    HRESULT hr;
+
+    if (unlikely(!pRasterizerDesc)) {
+        com_set(ppRasterizerState, This->rs_default);
+        return S_OK;
+    }
+
+    rs = util_hash_table_get(This->ht_rs, pRasterizerDesc);
+    if (!rs) {
+        if (This->rs_count >= D3D11_MAX_UNIQUE_STATE_OBJECT_COUNT)
+            return_error(D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS);
+
+        hr = D3D11RasterizerState_new(This, pRasterizerDesc, &rs);
+        if (FAILED(hr))
+            return_error(hr);
+    }
+    com_set(ppRasterizerState, rs);
+
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -233,7 +303,26 @@ D3D11Device_CreateSamplerState( struct D3D11Device *This,
                                 D3D11_SAMPLER_DESC *pSamplerDesc,
                                 ID3D11SamplerState **ppSamplerState )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11SamplerState *ss;
+    HRESULT hr;
+
+    if (unlikely(!pSamplerDesc)) {
+        com_set(ppSamplerState, This->ss_default);
+        return S_OK;
+    }
+
+    ss = util_hash_table_get(This->ht_ss, pSamplerDesc);
+    if (!ss) {
+        if (This->ss_count >= D3D11_MAX_UNIQUE_STATE_OBJECT_COUNT)
+            return_error(D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS);
+
+        hr = D3D11SamplerState_new(This, pSamplerDesc, &ss);
+        if (FAILED(hr))
+            return_error(hr);
+    }
+    com_set(ppSamplerState, ss);
+
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -316,13 +405,94 @@ D3D11Device_CheckCounter( struct D3D11Device *This,
     STUB_return(E_NOTIMPL);
 }
 
+#define D3D11_FEATURE_CASE(n, m) case D3D11_FEATURE_##n: \
+    if (FeatureSupportDataSize < sizeof(D3D11_FEATURE_DATA_##n)) \
+        return E_INVALIDARG;
 HRESULT WINAPI
 D3D11Device_CheckFeatureSupport( struct D3D11Device *This,
                                  D3D11_FEATURE Feature,
                                  void *pFeatureSupportData,
                                  UINT FeatureSupportDataSize )
 {
-    STUB_return(E_NOTIMPL);
+   struct pipe_screen *screen = This->screen;
+   union {
+      D3D11_FEATURE_DATA_THREADING t;
+      D3D11_FEATURE_DATA_DOUBLES d;
+      D3D11_FEATURE_DATA_FORMAT_SUPPORT f;
+      D3D11_FEATURE_DATA_FORMAT_SUPPORT2 f2;
+      D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS o10_x;
+      D3D11_FEATURE_DATA_D3D11_OPTIONS o11_0;
+      D3D11_FEATURE_DATA_ARCHITECTURE_INFO a;
+      D3D11_FEATURE_DATA_D3D9_OPTIONS o9;
+      D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT p;
+      D3D11_FEATURE_DATA_D3D9_SHADOW_SUPPORT s9;
+      D3D11_FEATURE_DATA_D3D11_OPTIONS1 o11_1;
+      D3D11_FEATURE_DATA_D3D9_SIMPLE_INSTANCING_SUPPORT i9;
+      D3D11_FEATURE_DATA_MARKER_SUPPORT m;
+   } *u = pFeatureSupportData;
+
+   switch (Feature) {
+   D3D11_FEATURE_CASE(THREADING)
+       u->t.DriverConcurrentCreates = FALSE;
+       u->t.DriverCommandLists = FALSE;
+       break;
+   D3D11_FEATURE_CASE(DOUBLES)
+       u->d.DoublePrecisionFloatShaderOps = FALSE; /* TODO */
+       break;
+   D3D11_FEATURE_CASE(FORMAT_SUPPORT)
+       return D3D11Device_CheckFormatSupport(This, u->f.InFormat, &u->f.OutFormatSupport);
+   D3D11_FEATURE_CASE(FORMAT_SUPPORT2)
+       return D3D11Device_CheckFormatSupport2(This, u->f.InFormat, &u->f.OutFormatSupport2);
+   D3D11_FEATURE_CASE(D3D10_X_HARDWARE_OPTIONS)
+       u->o10_x.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x = GET_PCAP(COMPUTE);
+       break;
+   /* NOTE: not honouring contraints listed on MSDN */
+   D3D11_FEATURE_CASE(D3D11_OPTIONS)
+       u->o11_0.OutputMergerLogicOp = TRUE;
+       u->o11_0.UAVOnlyRenderingForcedSampleCount = TRUE; /* always true in 11.1 */
+       u->o11_0.DiscardAPIsSeenByDriver = TRUE;
+       u->o11_0.FlagsForUpdateAndCopySeenByDriver = TRUE;
+       u->o11_0.ClearView = TRUE;
+       u->o11_0.CopyWithOverlap = TRUE;
+       u->o11_0.ConstantBufferPartialUpdate = TRUE; /* TODO: should this be false on r600 ? */
+       u->o11_0.ConstantBufferOffsetting = !!GET_PCAP(CONSTANT_BUFFER_OFFSET_ALIGNMENT);
+       u->o11_0.MapNoOverwriteOnDynamicConstantBuffer = TRUE;
+       u->o11_0.MapNoOverwriteOnDynamicBufferSRV = TRUE;
+       u->o11_0.MultisampleRTVWithForcedSampleCountOne = TRUE;
+       u->o11_0.SAD4ShaderInstructions = FALSE; /* TODO */
+       u->o11_0.ExtendedDoublesShaderInstructions = FALSE; /* TODO: f64 */
+       u->o11_0.ExtendedResourceSharing = FALSE;
+       break;
+   D3D11_FEATURE_CASE(ARCHITECTURE_INFO)
+       u->a.TileBasedDeferredRenderer = TRUE; /* TODO: query driver */
+       break;
+   D3D11_FEATURE_CASE(D3D9_OPTIONS)
+       u->o9.FullNonPow2TextureSupport = GET_PCAP(NPOT_TEXTURES);
+       break;
+   D3D11_FEATURE_CASE(SHADER_MIN_PRECISION_SUPPORT)
+       /* 32-bit precision only */
+       u->p.PixelShaderMinPrecision = 0;
+       u->p.AllOtherShaderStagesMinPrecision = 0;
+       break;
+   D3D11_FEATURE_CASE(D3D9_SHADOW_SUPPORT)
+       u->s9.SupportsDepthAsTextureWithLessEqualComparisonFilter = GET_PCAP(TEXTURE_SHADOW_MAP);
+       break;
+   D3D11_FEATURE_CASE(D3D11_OPTIONS1)
+       u->o11_1.TiledResourcesTier = D3D11_TILED_RESOURCES_NOT_SUPPORTED; /* TODO */
+       u->o11_1.MinMaxFiltering = FALSE; /* TODO */
+       u->o11_1.ClearViewAlsoSupportsDepthOnlyFormats = TRUE;
+       u->o11_1.MapOnDefaultBuffers = TRUE;
+       break;
+   D3D11_FEATURE_CASE(D3D9_SIMPLE_INSTANCING_SUPPORT)
+       u->i9.SimpleInstancingSupported = GET_PCAP(VERTEX_ELEMENT_INSTANCE_DIVISOR);
+       break;
+   D3D11_FEATURE_CASE(MARKER_SUPPORT)
+       u->m.Profile = FALSE;
+       break;
+   default:
+      return_error(E_INVALIDARG);
+   }
+   return S_OK;
 }
 
 HRESULT WINAPI

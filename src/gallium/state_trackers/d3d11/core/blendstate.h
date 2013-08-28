@@ -7,6 +7,8 @@
 struct D3D11BlendState
 {
     struct D3D11DeviceChild base;
+    void *cso;
+    D3D11_BLEND_DESC desc;
 };
 static INLINE struct D3D11BlendState *D3D11BlendState(void *ptr)
 {
@@ -14,7 +16,9 @@ static INLINE struct D3D11BlendState *D3D11BlendState(void *ptr)
 }
 
 HRESULT
-D3D11BlendState_new( struct D3D11Device *, struct D3D11BlendState **ppOut );
+D3D11BlendState_new( struct D3D11Device *,
+                     const D3D11_BLEND_DESC *,
+                     struct D3D11BlendState **ppOut );
 
 void WINAPI
 D3D11BlendState_GetDesc( struct D3D11BlendState *This,

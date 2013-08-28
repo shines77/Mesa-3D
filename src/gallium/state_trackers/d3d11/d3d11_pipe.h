@@ -159,6 +159,14 @@ d3d11_to_pipe_func(D3D11_COMPARISON_FUNC func)
 #undef D3D11_COMPARISON_FUNC_CASE
 
 static INLINE unsigned
+d3d11_to_pipe_cull_mode(D3D11_CULL_MODE mode)
+{
+    if (mode == D3D11_CULL_NONE)
+        return PIPE_FACE_NONE;
+    return (mode == D3D11_CULL_FRONT) ? PIPE_FACE_FRONT : PIPE_FACE_BACK;
+}
+
+static INLINE unsigned
 d3d11_to_pipe_polygon_mode(D3D11_FILL_MODE mode)
 {
    assert(mode == D3D11_FILL_WIREFRAME ||

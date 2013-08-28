@@ -4,9 +4,26 @@
 
 #include "unknown.h"
 
+#include "util/u_hash_table.h"
+
+#define D3D11_MAX_UNIQUE_STATE_OBJECT_COUNT 4096
+
 struct D3D11Device
 {
     struct D3D11Unknown base;
+
+    struct util_hash_tabke *ht_bs;
+    struct util_hash_table *ht_ds;
+    struct util_hash_table *ht_rs;
+    struct util_hash_table *ht_ss;
+    uint16_t bs_count;
+    uint16_t ds_count;
+    uint16_t rs_count;
+    uint16_t ss_count;
+    struct D3D11BlendState        *bs_default;
+    struct D3D11DepthStencilState *ds_default;
+    struct D3D11RasterizerState   *rs_default;
+    struct D3D11SamplerState      *ss_default;
 };
 static INLINE struct D3D11Device *D3D11Device(void *ptr)
 {

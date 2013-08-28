@@ -90,7 +90,18 @@ D3D11DeviceContext_DrawIndexed( struct D3D11DeviceContext *This,
                                 UINT StartIndexLocation,
                                 INT BaseVertexLocation )
 {
-    STUB();
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info.indexed = TRUE;
+    info.start = StartIndexLocation;
+    info.count = IndexCount;
+    info.start_instance = 0;
+    info.instance_count = 1;
+    info.index_bias = BaseVertexLocation;
+    info.primitive_restart = TRUE;
+    info.restart_index = 0xffffffff >> ((4 - This->ia.index_size) * 8);
+
+    This->pipe->draw(This->pipe, &info);
 }
 
 void WINAPI
@@ -98,7 +109,17 @@ D3D11DeviceContext_Draw( struct D3D11DeviceContext *This,
                          UINT VertexCount,
                          UINT StartVertexLocation )
 {
-    STUB();
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info.indexed = FALSE;
+    info.start = StartVertexLocation;
+    info.count = VertexCount;
+    info.start_instance = 0;
+    info.instance_count = 1;
+    info.index_bias = 0;
+    info.primitive_restart = FALSE;
+
+    This->pipe->draw(This->pipe, &info);
 }
 
 HRESULT WINAPI
@@ -164,7 +185,18 @@ D3D11DeviceContext_DrawIndexedInstanced( struct D3D11DeviceContext *This,
                                          INT BaseVertexLocation,
                                          UINT StartInstanceLocation )
 {
-    STUB();
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info.indexed = TRUE;
+    info.start = StartIndexLocation;
+    info.count = IndexCountPerInstance;
+    info.start_instance = StartInstanceLocation;
+    info.instance_count = InstanceCount;
+    info.index_bias = BaseVertexLocation;
+    info.primitive_restart = TRUE;
+    info.restart_index = 0xffffffff >> ((4 - This->ia.index_size) * 8);
+
+    This->pipe->draw(This->pipe, &info);
 }
 
 void WINAPI
@@ -174,7 +206,17 @@ D3D11DeviceContext_DrawInstanced( struct D3D11DeviceContext *This,
                                   UINT StartVertexLocation,
                                   UINT StartInstanceLocation )
 {
-    STUB();
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info.indexed = FALSE;
+    info.start = StartVertexLocation;
+    info.count = VertexCountPerInstance;
+    info.start_instance = StartInstanceLocation;
+    info.instance_count = InstanceCount;
+    info.index_bias = 0;
+    info.primitive_restart = FALSE;
+
+    This->pipe->draw(This->pipe, &info);
 }
 
 void WINAPI
@@ -961,7 +1003,7 @@ D3D11DeviceContext_ClearState( struct D3D11DeviceContext *This )
 void WINAPI
 D3D11DeviceContext_Flush( struct D3D11DeviceContext *This )
 {
-    STUB();
+    This->pipe->flush(This->pipe, NULL, 0);
 }
 
 D3D11_DEVICE_CONTEXT_TYPE WINAPI
