@@ -25,8 +25,8 @@
 static INLINE unsigned
 texture_target_from_desc(const D3D11_TEXTURE2D_DESC *pDesc)
 {
-    if (pDesc & D3D11_RESOURCE_MISC_TEXTURECUBE)
-        return PIPE_TEXTURE_CUBE;
+    if (pDesc->MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE)
+        return (pDesc->ArraySize > 1) ? PIPE_TEXTURE_CUBE_ARRAY : PIPE_TEXTURE_CUBE;
     return (pDesc->ArraySize > 1) ? PIPE_TEXTURE_2D_ARRAY : PIPE_TEXTURE_2D;
 }
 

@@ -17,9 +17,9 @@ static INLINE unsigned
 d3d11_usage_to_pipe_bind(D3D11_USAGE usage)
 {
     switch (usage) {
-    case D3D11_USAGE_DEFAULT: return 0;
-    case D3D11_USAGE_IMMUTABLE: return 0;
-    case D3D11_USAGE_DYNAMIC: return PIPE_BIND_TRANSFER_WRITE;
+    case D3D11_USAGE_DEFAULT: return PIPE_BIND_SAMPLER_VIEW;
+    case D3D11_USAGE_IMMUTABLE: return PIPE_BIND_SAMPLER_VIEW;
+    case D3D11_USAGE_DYNAMIC: return PIPE_BIND_TRANSFER_WRITE | PIPE_BIND_SAMPLER_VIEW;
     case D3D11_USAGE_STAGING: return PIPE_BIND_TRANSFER_WRITE | PIPE_BIND_TRANSFER_READ;
     default:
         assert(!"invalid D3D_USAGE");

@@ -43,7 +43,7 @@ D3D11Texture3D_ctor( struct D3D11Texture3D *This,
     templ.array_size = 1;
     templ.last_level =
         pDesc->MipLevels ? (pDesc->MipLevels - 1) : util_logbase2(max_dim);
-    templ.nr_samples = pDesc->SampleDesc.Count;
+    templ.nr_samples = 0;
     templ.usage = d3d11_to_pipe_usage(pDesc->Usage);
     templ.bind = d3d11_usage_to_pipe_bind(pDesc->Usage) |
         d3d11_to_pipe_bind(pDesc->BindFlags) |

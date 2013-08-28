@@ -22,15 +22,173 @@
 
 #include "shaderresourceview.h"
 
+static HRESULT
+D3D11ShaderResourceView_AdjustMipLevels( struct D3D11ShaderResourceView *This,
+                                         const unsigned Levels )
+{
+    switch (This->desc.ViewDimension) {
+    case D3D11_SRV_DIMENSION_TEXTURE1D:
+    case D3D11_SRV_DIMENSION_TEXTURE2D:
+    case D3D11_SRV_DIMENSION_TEXTURECUBE:
+    case D3D11_SRV_DIMENSION_TEXTURE3D:
+    case D3D11_SRV_DIMENSION_TEXTURE1DARRAY:
+    case D3D11_SRV_DIMENSION_TEXTURE2DARRAY:
+    case D3D11_SRV_DIMENSION_TEXTURECUBEARRAY:
+        if (This->desc.Texture1D.MipLevels == -1)
+            This->desc.Texture1D.MipLevels = Levels;
+        if (This->desc.Texture1D.MipLevels > Levels)
+            return E_INVALIDARG;
+        break;
+    default:
+        break;
+    }
+    return S_OK;
+}
+
 HRESULT
 D3D11ShaderResourceView_ctor( struct D3D11ShaderResourceView *This,
                               struct D3D11UnknownParams *pParams,
                               struct D3D11Resource *pResource,
                               const D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc )
 {
+    struct pipe_context *pipe = pParams->device->pipe;
+    struct pipe_resource *res = pResource->resource;
+    struct pipe_sampler_view templ;
     HRESULT hr;
 
-    This->desc = *pDesc;
+    user_assert(res->bind & PIPE_BIND_SAMPLER_VIEW, D3DERR_INVALIDCALL);
+
+    if (pDesc) {
+        This->desc = *pDesc;
+    } else {
+        This->desc.Format = pipe_to_dxgi_format(res->format);
+        switch (res->target) {
+        case PIPE_TEXTURE_1D:
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1D;
+            This->desc.Texture1D.MipLevels = res->last_level + 1;
+            break;
+        case PIPE_TEXTURE_2D:
+            if (res->nr_samples > 1) {
+                This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+            } else {
+                This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                This->desc.Texture2D.MipLevels = res->last_level + 1;
+            }
+            break;
+        case PIPE_TEXTURE_3D:
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+            This->desc.Texture3D.MipLevels = res->last_level + 1;
+            break;
+        case PIPE_TEXTURE_1D_ARRAY:
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1DARRAY;
+            This->desc.Texture1DArray.MipLevels = res->last_level + 1;
+            break;
+        case PIPE_TEXTURE_2D_ARRAY:
+            if (res->nr_samples > 1) {
+                This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;
+            } else {
+                This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                This->desc.Texture2DArray.MipLevels = res->last_level + 1;
+            }
+            break;
+        case PIPE_TEXTURE_CUBE:
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+            This->desc.TextureCube.MipLevels = res->last_level + 1;
+            break;
+        case PIPE_TEXTURE_CUBE_ARRAY:
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBEARRAY;
+            This->desc.TextureCubeArray.MipLevels = res->last_level + 1;
+            This->desc.TextureCubeArray.NumCubes = res->array_size / 6;
+            break;
+        case PIPE_BUFFER:
+            assert(util_format_get_blockwidth(res->format) == 1);
+            This->desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+            This->desc.Buffer.NumElements =
+                res->width0 / util_format_get_blocksize(res->format);
+            break;
+        default:
+            assert(0);
+            return_error(D3DERR_DRIVERINTERNALERROR);
+        }
+    }
+    pDesc = &This->desc;
+
+    hr = D3D11ShaderResourceView_AdjustMipLevels(This, res->last_level + 1);
+    if (FAILED(hr))
+        return_error(hr);
+
+    memset(&templ, 0, sizeof(templ));
+
+    switch (pDesc->ViewDimension) {
+    case D3D11_SRV_DIMENSION_TEXTURE1D:
+        templ.u.tex.first_level = pDesc->Texture1D.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->Texture1D.MipLevels - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE2D:
+        templ.u.tex.first_level = pDesc->Texture2D.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->Texture2D.MipLevels - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DMS:
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE3D:
+        templ.u.tex.first_level = pDesc->Texture3D.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->Texture3D.MipLevels - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE1DARRAY:
+        templ.u.tex.first_level = pDesc->Texture1DArray.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->Texture1DArray.MipLevels - 1;
+        templ.u.tex.first_layer = pDesc->Texture1DArray.FirstArraySlice;
+        templ.u.tex.last_layer =
+            templ.u.tex.first_layer + pDesc->Texture1DArray.ArraySize - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DARRAY:
+        templ.u.tex.first_level = pDesc->Texture2DArray.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->Texture2DArray.MipLevels - 1;
+        templ.u.tex.first_layer = pDesc->Texture2DArray.FirstArraySlice;
+        templ.u.tex.last_layer =
+            templ.u.tex.first_layer + pDesc->Texture2DArray.ArraySize - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY:
+        templ.u.tex.first_layer = pDesc->Texture2DMSArray.FirstArraySlice;
+        templ.u.tex.last_layer =
+            templ.u.tex.first_layer + pDesc->Texture2DMSArray.ArraySize - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURECUBE:
+        templ.u.tex.first_level = pDesc->TextureCube.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->TextureCube.MipLevels - 1;
+        break;
+    case D3D11_SRV_DIMENSION_TEXTURECUBEARRAY:
+        templ.u.tex.first_level = pDesc->TextureCubeArray.MostDetailedMip;
+        templ.u.tex.last_level =
+            templ.u.tex.first_level + pDesc->TextureCubeArray.MipLevels - 1;
+        templ.u.tex.first_layer = pDesc->TextureCubeArray.First2DArrayFace * 6;
+        templ.u.tex.last_layer =
+            templ.u.tex.first_layer + pDesc->TextureCubeArray.NumCubes * 6;
+        break;
+    case D3D11_SRV_DIMENSION_BUFFER:
+        templ.u.buf.first_element = pDesc->Buffer.FirstElement;
+        templ.u.buf.last_element =
+            templ.u.buf.first_element + pDesc->Buffer.NumElements - 1;
+        break;
+    default:
+        return_error(E_INVALIDARG);
+    }
+    templ.format = dxgi_to_pipe_format(pDesc->Format);
+
+    templ.swizzle_r = PIPE_SWIZZLE_RED;
+    templ.swizzle_g = PIPE_SWIZZLE_GREEN;
+    templ.swizzle_b = PIPE_SWIZZLE_BLUE;
+    templ.swizzle_a = PIPE_SWIZZLE_ALPHA;
+
+    This->sv = pipe->create_sampler_view(pipe, res, &templ);
+    if (!This->sv)
+        return_error(D3DERR_DRIVERINTERNALERROR);
 
     hr = D3D11View_ctor(&This->base, pParams, pResource);
     if (FAILED(hr))
@@ -76,8 +234,10 @@ static const GUID *D3D11ShaderResourceView_IIDs[] = {
 
 HRESULT
 D3D11ShaderResourceView_new( struct D3D11Device *pDevice,
-struct D3D11ShaderResourceView **ppOut )
+                             struct D3D11Resource *pResource,
+                             const D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                             struct D3D11ShaderResourceView **ppOut )
 {
-    D3D11_NEW(D3D11ShaderResourceView, ppOut, pDevice);
+    D3D11_NEW(D3D11ShaderResourceView, ppOut, pDevice, pResource, pDesc);
 }
 
