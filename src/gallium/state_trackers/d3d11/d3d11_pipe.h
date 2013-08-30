@@ -1,4 +1,26 @@
 
+static INLINE boolean
+d3d11_to_pipe_box(struct pipe_box *dst, D3D11_BOX *src)
+{
+    if (src->left >= src->right ||
+        src->top >= src->bottom ||
+        src->front >= src->back)
+        return FALSE;
+    dst->x = src->left;
+    dst->y = src->top;
+    dst->z = src->front;
+    dst->width = src->right - src->left;
+    dst->height = src->bottom - src->top;
+    dst->depth = src->back - src->front;
+    return TRUE;
+}
+
+static INLINE unsigned
+d3d11_subresource_to_level(struct pipe_resource *res, UINT sr)
+{
+    
+}
+
 static INLINE unsigned
 d3d11_to_pipe_usage(D3D11_USAGE usage)
 {

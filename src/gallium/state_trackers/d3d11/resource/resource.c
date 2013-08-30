@@ -26,9 +26,28 @@ HRESULT
 D3D11Resource_ctor( struct D3D11Resource *This,
                     struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
+    struct pipe_resource *res = This->resource;
+    HRESULT hr;
+    unsigned l, z, s;
+
+    hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+
+    assert(res);
+    This->num_sub = res->array_size * (res->last_level + 1);
+
+    This->sub = MALLOC(This->num_sub * sizeof(*This->sub));
+    if (!This->sub)
+        return_error(E_OUTOFMEMORY);
+
+    for (s = 0, l = 0; l <= res->last_level; ++l) {
+        for (z = 0; z < res->array_size; ++z, ++s) {
+            This->sub[s].level = l;
+            This->sub[s].layer = z;
+            This->sub[s].transfer = NULL;
+        }
+    }
 
     return S_OK;
 }
@@ -37,6 +56,9 @@ void
 D3D11Resource_dtor( struct D3D11Resource *This )
 {
     pipe_resource_reference(&This->resource, NULL);
+
+    if (This->sub)
+        FREE(This->sub);
 
     D3D11DeviceChild_dtor(&This->base);
 }

@@ -4,6 +4,13 @@
 
 #include "devicechild.h"
 
+struct D3D11Subresource
+{
+    struct pipe_tranfser *transfer;
+    uint16_t level;
+    uint16_t layer;
+};
+
 struct D3D11Resource
 {
     struct D3D11DeviceChild base;
@@ -11,6 +18,12 @@ struct D3D11Resource
     struct pipe_resource *resource;
     UINT lod;
     UINT eviction_priority;
+
+    D3D11_RESOURCE_DIMENSION type;
+    UBYTE format;
+
+    struct D3D11Subresource *sub;
+    unsigned num_sub;
 };
 static INLINE struct D3D11Resource *D3D11Resource(void *ptr)
 {

@@ -58,6 +58,9 @@ D3D11Texture3D_ctor( struct D3D11Texture3D *This,
     if (!This->base.resource)
         return_error(D3DERR_OUTOFVIDEOMEMORY);
 
+    This->base.format = pDesc->Format;
+    This->base.type = D3D11_RESOURCE_DIMENSION_TEXTURE3D;
+
     hr = D3D11Resource_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;

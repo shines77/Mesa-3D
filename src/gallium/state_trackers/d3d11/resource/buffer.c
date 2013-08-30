@@ -52,6 +52,9 @@ D3D11Buffer_ctor( struct D3D11Buffer *This,
     if (!This->base.resource)
         return_error(D3DERR_OUTOFVIDEOMEMORY);
 
+    This->base.format = DXGI_FORMAT_UNKNOWN;
+    This->base.type = D3D11_RESOURCE_DIMENSION_BUFFER;
+
     hr = D3D11Resource_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;

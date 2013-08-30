@@ -130,7 +130,50 @@ D3D11DeviceContext_Map( struct D3D11DeviceContext *This,
                         UINT MapFlags,
                         D3D11_MAPPED_SUBRESOURCE *pMappedResource )
 {
-    STUB_return(E_NOTIMPL);
+    struct pipe_context *pipe = This->pipe;
+    struct D3D11Resource *res = D3D11Resource(pResource);
+    struct pipe_box box;
+    unsigned usage;
+
+    user_assert(Subresource < res->num_sub, E_INVALIDARG);
+
+    user_assert(!res->sub[Subresource].transfer, D3DERR_INVALIDCALL);
+
+    box.x = 0;
+    box.y = 0;
+    box.z = res->sub[Subresource].layer;
+    box.width = u_minify(res->resource->width0, res->sub[Subresource].level);
+    box.height = u_minify(res->resource->height0, res->sub[Subresource].level);
+    box.depth = u_minify(res->resource->depth0, res->sub[Subresource].level);
+
+    switch (MapType) {
+    case D3D11_MAP_READ: usage = PIPE_TRANSFER_READ; break;
+    case D3D11_MAP_WRITE: usage = PIPE_TRANSFER_WRITE; break;
+    case D3D11_MAP_READ_WRITE: usage = PIPE_TRANSFER_READ_WRITE; break;
+    case D3D11_MAP_WRITE_DISCARD: usage = PIPE_TRANSFER_WRITE | PIPE_TRANSFER_DISCARD_WHOLE_RESOURCE ; break;
+    case D3D11_MAP_WRITE_NO_OVERWRITE: usage = PIPE_TRANSFER_WRITE | PIPE_TRANSFER_UNSYNCHRONIZED; break;
+    default:
+        return_error(E_INVALIDARG);
+        break;
+    }
+    if (MapFlags & D3D11_MAP_FLAG_DO_NOT_WAIT)
+        usage |= PIPE_TRANSFER_DONTBLOCK;
+
+    assert(pMappedResource);
+    pMappedResource->pData = pipe->transfer_map(pipe, res,
+                                                res->sub[Subresource].level,
+                                                usage,
+                                                &box,
+                                                &res->sub[Subresource].transfer);
+    if (!pMappedResource->pData) {
+        if (usage & PIPE_TRANSFER_DONTBLOCK)
+            return_error(DXGI_ERROR_WAS_STILL_DRAWING);
+        return_error(E_FAIL);
+    }
+    pMappedResource->RowPitch = res->sub[Subresource].transfer->stride;
+    pMappedResource->DepthPitch = res->sub[Subresource].transfer->layer_stride;
+
+    return S_OK;
 }
 
 void WINAPI
@@ -138,7 +181,13 @@ D3D11DeviceContext_Unmap( struct D3D11DeviceContext *This,
                           ID3D11Resource *pResource,
                           UINT Subresource )
 {
-    STUB();
+    struct D3D11Resource *res = D3D11Resource(pResource);
+
+    if (Subresource >= res->num_sub)
+        return;
+    if (!res->sub[Subresource].transfer)
+        return;
+    This->pipe->transfer_unmap(This->pipe, res->sub[Subresource].transfer);
 }
 
 void WINAPI
@@ -263,38 +312,6 @@ D3D11DeviceContext_VSSetSamplers( struct D3D11DeviceContext *This,
 }
 
 void WINAPI
-D3D11DeviceContext_Begin( struct D3D11DeviceContext *This,
-                          ID3D11Asynchronous *pAsync )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_End( struct D3D11DeviceContext *This,
-                        ID3D11Asynchronous *pAsync )
-{
-    STUB();
-}
-
-HRESULT WINAPI
-D3D11DeviceContext_GetData( struct D3D11DeviceContext *This,
-                            ID3D11Asynchronous *pAsync,
-                            void *pData,
-                            UINT DataSize,
-                            UINT GetDataFlags )
-{
-    STUB_return(E_NOTIMPL);
-}
-
-void WINAPI
-D3D11DeviceContext_SetPredication( struct D3D11DeviceContext *This,
-                                   ID3D11Predicate *pPredicate,
-                                   BOOL PredicateValue )
-{
-    STUB();
-}
-
-void WINAPI
 D3D11DeviceContext_GSSetShaderResources( struct D3D11DeviceContext *This,
                                          UINT StartSlot,
                                          UINT NumViews,
@@ -388,7 +405,14 @@ D3D11DeviceContext_Dispatch( struct D3D11DeviceContext *This,
                              UINT ThreadGroupCountY,
                              UINT ThreadGroupCountZ )
 {
-    STUB();
+    struct pipe_context *pipe = This->pipe;
+    uint grid_layout[3];
+
+    grid_layout[0] = ThreadGroupCountX;
+    grid_layout[1] = ThreadGroupCountY;
+    grid_layout[2] = ThreadGroupCountZ;
+
+    pipe->launch_grid(pipe, This->cs.group_size, grid_layout, NULL, NULL);
 }
 
 void WINAPI
@@ -433,7 +457,58 @@ D3D11DeviceContext_CopySubresourceRegion( struct D3D11DeviceContext *This,
                                           UINT SrcSubresource,
                                           D3D11_BOX *pSrcBox )
 {
-    STUB();
+    struct D3D11Resource *dst = D3D11Resource(pDstResource);
+    struct D3D11Resource *src = D3D11Resource(pDstResource);
+    struct pipe_context *pipe = This->pipe;
+    unsigned dst_level;
+    unsigned src_level;
+    unsigned dst_w, dst_h, dst_d;
+    unsigned src_w, src_h, src_d;
+    struct pipe_box box;
+
+    if (dst == src && DstSubresource == SrcSubresource)
+        return;
+    if (dst->resource->target == PIPE_BUFFER &&
+        src->resource->target != PIPE_BUFFER)
+        return;
+
+    dst_level = d3d11_subresource_to_level(dst->resource, DstSubresource);
+    src_level = d3d11_subresource_to_level(src->resource, SrcSubresource);
+
+    dst_w = u_minify(dst->resource->width0, dst_level);
+    dst_h = u_minify(dst->resource->height0, dst_level);
+    dst_d = u_minify(dst->resource->depth0, dst_level);
+
+    src_w = u_minify(src->resource->width0, src_level);
+    src_h = u_minify(src->resource->height0, src_level);
+    src_d = u_minify(src->resource->depth0, src_level);
+
+    if (DstX >= dst_w || DstY >= dst_h || DstZ >= dst_d)
+        return;
+    if (pSrcBox->right < src_w ||
+        pSrcBox->bottom < src_h ||
+        pSrcBox->back < src_d)
+        return;
+
+    if (pSrcBox) {
+        if (!d3d11_to_pipe_box(&box, pSrcBox))
+            return;
+    } else {
+        box.x = 0;
+        box.y = 0;
+        box.z = 0;
+        box.width = MIN2(dst_w - DstX, src_w);
+        box.height = MIN2(dst_h - DstY, src_h);
+        box.depth = MIN2(dst_d - DstZ, src_d);
+    }
+    if ((DstX + box.width < dst_w) ||
+        (DstY + box.height < dst_h) ||
+        (DstZ + box.depth < dst_d))
+        return;
+
+    pipe->resource_copy_region(pipe,
+                               dst->resource, dst_level, DstX, DstY, DstZ,
+                               src->resource, src_level, &box);
 }
 
 void WINAPI
@@ -441,7 +516,26 @@ D3D11DeviceContext_CopyResource( struct D3D11DeviceContext *This,
                                  ID3D11Resource *pDstResource,
                                  ID3D11Resource *pSrcResource )
 {
-    STUB();
+    struct D3D11Resource *dst = D3D11Resource(pDstResource);
+    struct D3D11Resource *src = D3D11Resource(pSrcResource);
+    unsigned last_level = MIN2(dst->resource->last_level, src->resource->last_level);
+    unsigned l;
+    unsigned w = MIN2(dst->resource->width0, src->resource->width0);
+    unsigned h = MIN2(dst->resource->height0, src->resource->height0);
+    unsigned d = MIN2(dst->resource->depth0, src->resource->depth0);
+    struct pipe_box box;
+    box.x = 0;
+    box.y = 0;
+    box.z = 0;
+
+    for (l = 0; l <= last_level; ++l) {
+        box.width = u_minify(w, l);
+        box.height = u_minify(h, l);
+        box.depth = u_minify(d, l);
+        pipe->resource_copy_region(pipe,
+                                   dst->resource, l, 0, 0, 0,
+                                   src->resource, l, &box);
+    }
 }
 
 void WINAPI
@@ -453,7 +547,19 @@ D3D11DeviceContext_UpdateSubresource( struct D3D11DeviceContext *This,
                                       UINT SrcRowPitch,
                                       UINT SrcDepthPitch )
 {
-    STUB();
+    struct D3D11Resource *dst = D3D11Resource(pDstResource);
+    struct pipe_box box;
+    struct pipe_context *pipe = This->pipe;
+    unsigned level;
+
+    if (!d3d11_to_pipe_box(&box, pDstBox))
+        return;
+    level = d3d11_subresource_to_level(dst, DstSubresource);
+
+    pipe->transfer_inline_write(pipe,
+                                dst->resource, level, 0,
+                                &box,
+                                pSrcData, SrcRowPitch, SrcDepthPitch);
 }
 
 void WINAPI
@@ -470,7 +576,12 @@ D3D11DeviceContext_ClearRenderTargetView( struct D3D11DeviceContext *This,
                                           ID3D11RenderTargetView *pRenderTargetView,
                                           ConstantArray ColorRGBA )
 {
-    STUB();
+    struct D3D11RenderTargetView *rtv = D3D11RenderTargetView(pRenderTargetView);
+
+    This->pipe->clear_render_target(This->pipe, rtv->surface,
+                                    (union pipe_color_union *)&ColorRGBA,
+                                    0, 0,
+                                    rtv->surface->width, rtv->surface->height);
 }
 
 void WINAPI
@@ -478,7 +589,12 @@ D3D11DeviceContext_ClearUnorderedAccessViewUint( struct D3D11DeviceContext *This
                                                  ID3D11UnorderedAccessView *pUnorderedAccessView,
                                                  ConstantArray Values )
 {
-    STUB();
+    struct D3D11UnorderedAccessView *uav = D3D11UnorderedAccessView(pUnorderedAccessView);
+
+    This->pipe->clear_render_target(This->pipe, uav->surface,
+                                    (union pipe_color_union *)&Values,
+                                    0, 0,
+                                    uav->surface->width, uav->surface->height);
 }
 
 void WINAPI
@@ -486,7 +602,12 @@ D3D11DeviceContext_ClearUnorderedAccessViewFloat( struct D3D11DeviceContext *Thi
                                                   ID3D11UnorderedAccessView *pUnorderedAccessView,
                                                   ConstantArray Values )
 {
-    STUB();
+    struct D3D11UnorderedAccessView *uav = D3D11UnorderedAccessView(pUnorderedAccessView);
+
+    This->pipe->clear_render_target(This->pipe, uav->surface,
+                                    (union pipe_color_union *)&Values,
+                                    0, 0,
+                                    uav->surface->width, uav->surface->height);
 }
 
 void WINAPI
@@ -496,7 +617,18 @@ D3D11DeviceContext_ClearDepthStencilView( struct D3D11DeviceContext *This,
                                           FLOAT Depth,
                                           Int Stencil )
 {
-    STUB();
+    struct D3D11DepthStencilView *dsv = D3D11DepthStencilView(pDepthStencilView);
+    unsigned bufs;
+
+    bufs = 0;
+    if (ClearFlags & D3D11_CLEAR_DEPTH)   bufs  = PIPE_CLEAR_DEPTH;
+    if (ClearFlags & D3D11_CLEAR_STENCIL) bufs |= PIPE_CLEAR_STENCIL;
+
+    This->pipe->clear_depth_stencil(This->pipe, dsv->surface,
+                                    bufs,
+                                    Depth, Stencil,
+                                    0, 0,
+                                    dsv->surface->width, dst->surface->height);
 }
 
 void WINAPI
@@ -527,9 +659,44 @@ D3D11DeviceContext_ResolveSubresource( struct D3D11DeviceContext *This,
                                        UINT DstSubresource,
                                        ID3D11Resource *pSrcResource,
                                        UINT SrcSubresource,
-                                       Int Format )
+                                       DXGI_FORMAT Format )
 {
-    STUB();
+    struct D3D11Resource *dst = D3D11Resource(pDstResource);
+    struct D3D11Resource *src = D3D11Resource(pSrcResource);
+    struct pipe_context *pipe = This->pipe;
+    struct pipe_blit_info blit;
+    enum pipe_format pf = dxgi_to_pipe_format(Format);
+
+    if (dst->resource->nr_samples > 1 ||
+        src->resource->nr_samples < 2)
+        return;
+
+    blit.dst.resource = dst->resource;
+    blit.dst.level = d3d11_subresource_to_level(dst, DstSubresource);
+    blit.dst.box.x = 0;
+    blit.dst.box.y = 0;
+    blit.dst.box.z = d3d11_subresource_to_layer(dst, DstSubresource);
+    blit.dst.box.width = u_minify(dst->resource->width0, blit.dst.level);
+    blit.dst.box.height = u_minify(dst->resource->height0, blit.dst.level);
+    blit.dst.box.depth = 1;
+    blit.dst.format = dxgi_to_pipe_format(Format);
+
+    blit.src.resource = src->resource;
+    blit.src.level = d3d11_subresource_to_level(src, SrcSubresource);
+    blit.src.box.x = 0;
+    blit.src.box.y = 0;
+    blit.src.box.z = d3d11_subresource_to_layer(src, SrcSubresource);
+    blit.src.box.width = u_minify(src->resource->width0, blit.src.level);
+    blit.src.box.height = u_minify(src->resource->height0, blit.src.level);
+    blit.src.box.depth = 1;
+    blit.src.format = blit.dst.format;
+
+    blit.mask = util_format_is_depth_or_stencil(blit.dst.format) ?
+        PIPE_MASK_ZS : PIPE_MASK_RGBA;
+    blit.filter = PIPE_TEX_FILTER_LINEAR;
+    blit.scissor_enable = FALSE;
+
+    pipe->blit(pipe, &blit);
 }
 
 void WINAPI
