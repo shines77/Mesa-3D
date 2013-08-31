@@ -36,6 +36,11 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11DomainShader_dtor( struct D3D11DomainShader *This )
 {
+#ifdef PIPE_SHADER_DOMAIN
+    if (This->cso) {
+        DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_ds_state, This->cso);
+    }
+#endif
     D3D11DeviceChild_dtor(&This->base);
 }
 

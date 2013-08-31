@@ -7,6 +7,57 @@
 struct D3D11DeviceContext
 {
     struct D3D11DeviceChild base;
+
+    D3D11_DEVICE_CONTEXT_TYPE type;
+    UINT flags;
+
+    struct {
+        struct D3D11InputLayout *so;
+        D3D11_PRIMITIVE_TOPOLOGY topology;
+        struct D3D11Buffer *buffer[PIPE_MAX_ATTRIBS + 1];
+        struct pipe_draw_info draw;
+        struct pipe_vertex_buffer vtxbuf[PIPE_MAX_ATTRIBS];
+        struct pipe_index_buffer idxbuf;
+    } ia;
+    struct {
+        struct D3D11RasterizerState *so;
+        struct pipe_scissor_state scissor[PIPE_MAX_VIEWPORTS];
+        struct pipe_viewport_state vport[PIPE_MAX_VIEWPORTS];
+        unsigned num_scissors;
+        unsigned num_vports;
+    } rs;
+    struct {
+        struct D3D11RenderTargetView *rtv[PIPE_MAX_COLOR_BUFS];
+        struct D3D11DepthStencilView *dsv;
+        struct D3D11DepthStencilState *ds;
+        struct D3D11BlendState *bs;
+        uint8_t num_rtvs;
+        uint8_t stencil_ref;
+        struct pipe_blend_color blend_color;
+        uint32_t sample_mask;
+    } om;
+
+    struct D3D11VertexShader   *vs;
+    struct D3D11HullShader     *hs;
+    struct D3D11DomainShader   *ds;
+    struct D3D11GeometryShader *gs;
+    struct D3D11PixelShader    *ps;
+    struct D3D11ComputeShader  *cs;
+
+    struct {
+        D3D11Buffer *buffer;
+        struct pipe_constant_buffer cb;
+    } cb[6][16];
+
+    struct D3D11SamplerState *ss[6][PIPE_MAX_SAMPLERS];
+    struct D3D11ShaderResourceView *srv[6][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+
+    struct D3D11UnorderedAccessView *uav[16];
+
+    struct {
+        struct D3D11Buffer *buffer[PIPE_MAX_SO_BUFFERS];
+        struct pipe_stream_output_target *target[PIPE_MAX_SO_BUFFERS];
+    } so;
 };
 static INLINE struct D3D11DeviceContext *D3D11DeviceContext(void *ptr)
 {

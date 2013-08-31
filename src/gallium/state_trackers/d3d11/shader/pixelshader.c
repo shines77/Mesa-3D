@@ -36,6 +36,9 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11PixelShader_dtor( struct D3D11PixelShader *This )
 {
+    if (This->cso) {
+        DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_fs_state, This->cso);
+    }
     D3D11DeviceChild_dtor(&This->base);
 }
 

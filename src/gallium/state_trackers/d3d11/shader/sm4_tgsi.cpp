@@ -106,7 +106,7 @@ struct sm4_token_instruction
       unsigned TestNZ     : 1;
       unsigned Precision  : 4;
       unsigned _23        : 1;
-   } insn;
+   } Insn;
 
    struct {
       unsigned Opcode         : 11;
@@ -115,7 +115,7 @@ struct sm4_token_instruction
       unsigned UAVGroup       : 1;
       unsigned UAVGlobal      : 1;
       unsigned _15_17         : 3;
-   } sync;
+   } Sync;
 
    struct {
       unsigned Opcode                        : 11;
@@ -123,42 +123,42 @@ struct sm4_token_instruction
       unsigned FP64                          : 1;
       unsigned EarlyFragmentTests            : 1;
       unsigned EnableRawAndStructuredInNonCS : 1;
-   } dcl_global_flags;
+   } DclGlobalFlags;
 
    struct {
       unsigned Opcode : 11;
       unsigned Target : 5;
       unsigned NrSamples : 7;
-   } dcl_resource;
+   } DclResource;
 
    struct {
       unsigned Opcode : 11;
       unsigned Shadow : 1;
       unsigned Mono   : 1;
-   } dcl_sampler;
+   } DclSampler;
 
    struct {
       unsigned Opcode        : 11;
       unsigned Interpolation : 5;
-   } dcl_input_ps;
+   } DclInputPS;
 
    struct {
       unsigned Opcode : 11;
       unsigned Dynamic : 1;
-   } dcl_constant_buffer;
+   } DclConstBuf;
 };
 
 struct sm4_token_operand
 {
-   unsigned Comps : 2;
-   unsigned Mode : 2;
-   unsigned Sel : 2;
-   unsigned File : 8;
+   unsigned Comps      : 2;
+   unsigned Mode       : 2;
+   unsigned Sel        : 2;
+   unsigned File       : 8;
    unsigned NumIndices : 2;
    unsigned Index0Repr : 3;
    unsigned Index1Repr : 3;
    unsigned Index2Repr : 3;
-   unsigned Extended : 1;
+   unsigned Extended   : 1;
 };
 
 static void
@@ -174,6 +174,57 @@ struct sm4_op_info
    unsigned numDst;
    unsigned numSrc;
 };
+
+struct ureg_src
+sm4_tx_src(struct sm4_token_operand op)
+{
+}
+
+struct ureg_dst
+sm4_tx_dst(struct sm4_token_operand op)
+{
+}
+
+OPCODE_HANDLER(LABEL)
+{
+}
+
+OPCODE_HANDLER(CUSTOMDATA)
+{
+}
+
+OPCODE_HANDLER(DCL_GLOBAL_FLAGS)
+{
+    return S_OK;
+}
+
+OPCODE_HANDLER(DCL_RESOURCE)
+{
+    unsigned s = num_resources++;
+    unsigned target = translate_target(insn.DclResource.Target);
+    unsigned ret_x = translate_type(insn.DclResource.ReturnX);
+    unsigned ret_y = translate_type(insn.DclResource.ReturnY);
+    unsigned ret_z = translate_type(insn.DclResource.ReturnZ);
+    unsigned ret_w = translate_type(insn.DclResource.ReturnW);
+
+    ureg_DECL_sampler_view(ureg, s, target, ret_x, ret_y, ret_z, ret_w);
+
+    return S_OK;
+}
+
+OPCODE_HANDLER(DCL_CONSTANT_BUFFER)
+{
+}
+
+OPCODE_HANDLER(DCL_SAMPLER)
+{
+    ureg_DECL_sampler();
+}
+
+OPCODE_HANDLER(DCL_INPUT_PS)
+{
+    
+}
 
 unsigned sm4_to_tgsi_opcode[] =
 {
@@ -397,3 +448,12 @@ unsigned sm4_to_tgsi_opcode[] =
 
    /* DCL_GS_INSTANCE_COUNT */ 0
 };
+
+void process_sm4()
+{
+    struct sm4_token_instruction *insn;
+
+    while (insn->get())
+        insn->process();
+}
+

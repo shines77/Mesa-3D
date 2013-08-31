@@ -7,6 +7,7 @@
 struct D3D11DomainShader
 {
     struct D3D11DeviceChild base;
+    void *cso;
 };
 static INLINE struct D3D11DomainShader *D3D11DomainShader(void *ptr)
 {

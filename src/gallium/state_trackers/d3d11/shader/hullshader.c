@@ -36,6 +36,11 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11HullShader_dtor( struct D3D11HullShader *This )
 {
+#ifdef PIPE_SHADER_HULL
+    if (This->cso) {
+        DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_hs_state, This->cso);
+    }
+#endif
     D3D11DeviceChild_dtor(&This->base);
 }
 

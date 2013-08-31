@@ -7,6 +7,7 @@
 struct D3D11VertexShader
 {
     struct D3D11DeviceChild base;
+    void *cso;
 };
 static INLINE struct D3D11VertexShader *D3D11VertexShader(void *ptr)
 {

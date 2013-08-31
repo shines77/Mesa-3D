@@ -7,6 +7,7 @@
 struct D3D11GeometryShader
 {
     struct D3D11DeviceChild base;
+    void *cso;
 };
 static INLINE struct D3D11GeometryShader *D3D11GeometryShader(void *ptr)
 {

@@ -7,6 +7,7 @@
 struct D3D11HullShader
 {
     struct D3D11DeviceChild base;
+    void *cso;
 };
 static INLINE struct D3D11HullShader *D3D11HullShader(void *ptr)
 {

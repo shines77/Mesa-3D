@@ -24,7 +24,7 @@
 
 HRESULT
 D3D11VertexShader_ctor( struct D3D11VertexShader *This,
-struct D3D11UnknownParams *pParams)
+                        struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
@@ -36,6 +36,9 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11VertexShader_dtor( struct D3D11VertexShader *This )
 {
+    if (This->cso) {
+        DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_vs_state, This->cso);
+    }
     D3D11DeviceChild_dtor(&This->base);
 }
 

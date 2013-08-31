@@ -6,7 +6,8 @@
 
 struct D3D11ComputeShader
 {
-    struct D3D11DeviceChild base;
+    struct D3D11BaseShader base;
+    struct pipe_compute_state so;
 };
 static INLINE struct D3D11ComputeShader *D3D11ComputeShader(void *ptr)
 {
