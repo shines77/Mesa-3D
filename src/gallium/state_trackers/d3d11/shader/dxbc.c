@@ -10,6 +10,9 @@
 #define FOURCC_STAT MAKEFOURCC('S', 'T', 'A', 'T')
 #define FOURCC_PCSG MAKEFOURCC('P', 'C', 'S', 'G')
 
+#define FOURCC_CHARS(x) ((x) >>  0) & 0xff, ((x) >>  8) & 0xff, ((x) >> 16) & 0xff, ((x) >> 24) & 0xff)
+
+
 struct dxbc_chunk_header
 {
     uint32_t FourCC;
@@ -31,7 +34,7 @@ struct dxbc_chunk_signature
         uint8_t ReadWriteMask;
         uint8_t Stream;
         uint8_t Unused;
-    } Elements[];
+    } Element[];
 };
 
 struct dxbc_container_header
@@ -66,7 +69,32 @@ struct d3d11_shader_info
         D3D11_TESSELLATOR_PARTITIONING partitioning;
         D3D11_TESSELLATOR_OUTPUT_PRIMITIVE output;
     } tess;
+
+    struct {
+        uint8_t *toks;
+        uint32_t size;
+    } bytecode;
 };
+
+static unsigned
+dxbc_parse_signature(const struct dxbc_chunk_header *chunk, D3D11_SIGNATURE_PARAMETER_DESC **sig)
+{
+    const struct dxbc_chunk_signature *data = (void *)chunk;
+
+    *sig = MALLOC(data->Count * sizeof(D3D11_SIGNATURE_PARAMETER_DESC));
+    if (!*sig)
+        return 0;
+    for (i = 0; i < data->Count; ++i) {
+        (*sig)[i].SemanticName = (char *)&data->Count + LE32_TO_CPU(data->Element[i].NameOffset);
+        (*sig)[i].SemanticIndex = data->Element[i].SemanticIndex;
+        (*sig)[i].Register = data->Element[i].RegisterNum;
+        (*sig)[i].SystemValueType = data->Element[i].SystemValueType;
+        (*sig)[i].ComponentType = data->Element[i].ComponentType;
+        (*sig)[i].Mask = data->Element[i].Mask;
+        (*sig)[i].ReadWriteMask = data->Element[i].ReadWriteMask;
+    }
+    return data->Count;
+}
 
 HRESULT
 dxbc_parse(struct d3d11_shader_info *info, const uint8_t *bytecode, SIZE_T size)
@@ -76,25 +104,35 @@ dxbc_parse(struct d3d11_shader_info *info, const uint8_t *bytecode, SIZE_T size)
     unsigned num_chunks;
     unsigned i;
 
+    if (hdr->FourCC != FOURCC_DXBC)
+        return E_INVALIDARG;
+
     num_chunks = LE32_TO_CPU(hdr->ChunkCount);
     for (i = 0; i < num_chunks; ++i) {
         chunk = (void *)(bytecode + LE32_TO_CPU(hdr->ChunkOffset[i]));
 
         switch (LE32_TO_CPU(chunk->FourCC)) {
-        case FOURCC_DXBC: break;
-        case FOURCC_RDEF: break;
-        case FOURCC_ISGN: break;
-        case FOURCC_OSGN: break;
-        case FOURCC_SHDR: break;
-        case FOURCC_SHEX: break;
-        case FOURCC_STAT: break;
-        case FOURCC_PCSG: break;
+        case FOURCC_DXBC:
+        case FOURCC_RDEF:
+        case FOURCC_STAT:
+            MESSAGE("ignored chunk: %c%c%c%c\n", FOURCC_CHARS(chunk->FourCC));
+            break;
+        case FOURCC_ISGN:
+            info->num_inputs = dxbc_parse_signature(chunk, &info->in);
+            break;
+        case FOURCC_OSGN:
+            info->num_outputs = dxbc_parse_signature(chunk, &info->out);
+            break;
+        case FOURCC_PCSG:
+            info->num_pcs = dxbc_parse_signature(chunk, &info->pc);
+            break;
+        case FOURCC_SHDR:
+        case FOURCC_SHEX:
+            info->bytecode.toks = (uint8_t *)&chunk[1];
+            info->bytecode.size = LE32_TO_CPU(chunk->Size);
+            break;
         default:
-            MESSAGE("unrecognized DXBC chunk: %c%c%c%c\n",
-                    (chunk->FourCC >>  0) & 0xff,
-                    (chunk->FourCC >>  8) & 0xff,
-                    (chunk->FourCC >> 16) & 0xff,
-                    (chunk->FourCC >> 24) & 0xff);
+            MESSAGE("unrecognized DXBC chunk: %c%c%c%c\n", FOURCC_CHARS(chunk->FourCC);
             break;
         }
     }
