@@ -45,8 +45,9 @@ D3D11DeviceContext_dtor( struct D3D11DeviceContext *This )
     D3D11DeviceChild_dtor(&This->base);
 }
 
-#define IMPLEMENT_SETCONSTANTBUFFERS(n, s) \
-static INLINE void \
+
+#define IMPLEMENT_SETCGETONSTANTBUFFERS(n, s) \
+void WINAPI \
 D3D11DeviceContext_##n##SetConstantBuffers( struct D3D11DeviceContext *This, \
                                             UINT StartSlot, \
                                             UINT NumBuffers, \
@@ -67,91 +68,148 @@ D3D11DeviceContext_##n##SetConstantBuffers( struct D3D11DeviceContext *This, \
         } \
         pipe->set_constant_buffer(pipe, s, &This->cb[s][k]); \
     } \
+} \
+void WINAPI \
+D3D11DeviceContext_##n##GetConstantBuffers( struct D3D11DeviceContext *This, \
+                                            UINT StartSlot, \
+                                            UINT NumBuffers, \
+                                            ID3D11Buffer **ppConstantBuffers ) \
+{ \
+    unsigned i, b; \
+ \
+    for (i = 0; i < NumBuffers; ++i) { \
+        b = StartSlot + i; \
+        com_set(&ppConstantBuffers[i], This->cb[s][b].buffer); \
+    } \
 }
-IMPLEMENT_SETCONSTANTBUFFERS(VS, PIPE_SHADER_VERTEX);
-IMPLEMENT_SETCONSTANTBUFFERS(HS, PIPE_SHADER_HULL);
-IMPLEMENT_SETCONSTANTBUFFERS(DS, PIPE_SHADER_DOMAIN);
-IMPLEMENT_SETCONSTANTBUFFERS(GS, PIPE_SHADER_GEOMETRY);
-IMPLEMENT_SETCONSTANTBUFFERS(PS, PIPE_SHADER_FRAGMENT);
-IMPLEMENT_SETCONSTANTBUFFERS(CS, PIPE_SHADER_COMPUTE);
+IMPLEMENT_SETGETCONSTANTBUFFERS(VS, PIPE_SHADER_VERTEX);
+IMPLEMENT_SETGETCONSTANTBUFFERS(HS, PIPE_SHADER_HULL);
+IMPLEMENT_SETGETCONSTANTBUFFERS(DS, PIPE_SHADER_DOMAIN);
+IMPLEMENT_SETGETCONSTANTBUFFERS(GS, PIPE_SHADER_GEOMETRY);
+IMPLEMENT_SETGETCONSTANTBUFFERS(PS, PIPE_SHADER_FRAGMENT);
+IMPLEMENT_SETGETCONSTANTBUFFERS(CS, PIPE_SHADER_COMPUTE);
 
-void WINAPI
-D3D11DeviceContext_PSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
 
-static void
-D3D11DeviceContext_SetShaderClassIntstances( struct D3D11DeviceContext *This,
-                                             const unsigned s,
-                                             ID3D11ClassInstance **ppClassInstances,
-                                             UINT NumClassInstances )
-{
-    if (!NumClassInstances)
-        return;
-    if (NumClassInstances > 256)
-        ERROR("more than 256 class instances\n");
-    WARN("ignoring unexpected class instances\n");
+#define IMPLEMENT_SETGETSHADER(n, sp, iface, pt) \
+void WINAPI \
+D3D11DeviceContext_##n##SetShader( struct D3D11DeviceContext *This, \
+                                   ID3D11##iface##Shader *pShader, \
+                                   ID3D11ClassInstance **ppClassInstances, \
+                                   UINT NumClassInstances ) \
+{ \
+    com_ref(&This->sp, pShader); \
+    if (This->sp != pShader) \
+        This->pipe->bind_##pt##_state(This->pipe, This->sp->cso); \
+ \
+    if (!NumClassInstances) \
+        return; \
+    if (NumClassInstances > 256) \
+        ERROR("more than 256 class instances\n"); \
+    WARN("ignoring unexpected class instances\n"); \
+} \
+void WINAPI \
+D3D11DeviceContext_##n##GetShader( struct D3D11DeviceContext *This, \
+                                   ID3D11##iface##Shader **ppShader, \
+                                   ID3D11ClassInstance **ppClassInstances, \
+                                   UINT *pNumClassInstances ) \
+{ \
+    if (ppShader) \
+        com_set(ppShader, This->sp); \
+    if (ppClassInstances) \
+        *pNumClassInstances = 0; /* TODO */ \
 }
+IMPLEMENT_SETGETSHADER(VS, vs, Vertex, PIPE_SHADER_VERTEX);
+IMPLEMENT_SETGETSHADER(HS, hs, Hull, PIPE_SHADER_HULL);
+IMPLEMENT_SETGETSHADER(DS, ds, Domain, PIPE_SHADER_DOMAIN);
+IMPLEMENT_SETGETSHADER(GS, gs, Geometry, PIPE_SHADER_GEOMETRY);
+IMPLEMENT_SETGETSHADER(PS, ps, Pixel, PIPE_SHADER_FRAGMENT);
 
-#define SetClassInstances(a, b, c, d) \
-    D3D11DeviceContext_SetShaderClassInstances(a, b, c, d)
-void WINAPI
-D3D11DeviceContext_VSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11VertexShader *pVertexShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    SetClassInstances(VERTEX);
-    com_ref(&This->vs, pVertexShader);
-    This->pipe->bind_vs_state(This->pipe, This->vs->cso);
-}
-void WINAPI
-D3D11DeviceContext_HSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11HullShader *pHullShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    STUB();
-}
-void WINAPI
-D3D11DeviceContext_DSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11DomainShader *pDomainShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    STUB();
-}
-void WINAPI
-D3D11DeviceContext_GSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11GeometryShader *pShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    STUB();
-}
-void WINAPI
-D3D11DeviceContext_PSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11PixelShader *pPixelShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    SetClassInstances(FRAGMENT);
-    com_ref(&This->ps, pPixelShader);
-    This->pipe->bind_fs_state(This->pipe, This->vs->cso);
-}
 
-void WINAPI
-D3D11DeviceContext_PSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
+#define IMPLEMENT_SETGETSAMPLERS(n, t, s) \
+void WINAPI \
+D3D11DeviceContext_##n##SetSamplers( struct D3D11DeviceContext *This, \
+                                     UINT StartSlot, \
+                                     UINT NumSamplers, \
+                                     ID3D11SamplerState **ppSamplers ) \
+{ \
+    void *cso[PIPE_MAX_SAMPLERS]; \
+    unsigned i, k; \
+    struct pipe_context *pipe = This->pipe; \
+ \
+    assert(ppSamplers); \
+ \
+    for (i = 0; i < NumSamplers; ++i) { \
+        k = StartSlot + i; \
+        if (ppSamplers[i]) \
+            com_ref(&This->ss[s][k], ppSamplers[i]); \
+        else \
+            com_ref(&This->ss[s][k], This->base.device->ss_default); \
+        cso[i] = This->ss[s][k]->cso; \
+    } \
+    pipe->set_##t##_samplers(pipe, StartSlot, NumSamplers, cso); \
+} \
+void WINAPI \
+D3D11DeviceContext_##n##GetSamplers( struct D3D11DeviceContext *This, \
+                                     UINT StartSlot, \
+                                     UINT NumSamplers, \
+                                     ID3D11SamplerState **ppSamplers ) \
+{ \
+    unsigned i, k; \
+ \
+    assert(ppSamplers); \
+    for (i = 0; i < NumSamplers; ++i) { \
+        k = StartSlot + i; \
+        com_set(&ppSamplers[i], This->ss[s][k]->cso); \
+    } \
 }
+IMPLEMENT_SETGETSAMPLERS(VS, vertex, PIPE_SHADER_VERTEX);
+IMPLEMENT_SETGETSAMPLERS(HS, hull, PIPE_SHADER_HULL);
+IMPLEMENT_SETGETSAMPLERS(DS, domain, PIPE_SHADER_DOMAIN);
+IMPLEMENT_SETGETSAMPLERS(GS, geometry, PIPE_SHADER_GEOMETRY);
+IMPLEMENT_SETGETSAMPLERS(PS, fragment, PIPE_SHADER_FRAGMENT);
+IMPLEMENT_SETGETSAMPLERS(CS, compute, PIPE_SHADER_COMPUTE);
+
+
+#define IMPLEMENT_SETGETSHADERRESOURCES(n, t, s) \
+void WINAPI \
+D3D11DeviceContext_##n##SetShaderResources( struct D3D11DeviceContext *This, \
+                                            UINT StartSlot, \
+                                            UINT NumViews, \
+                                            ID3D11ShaderResourceView **ppShaderResourceViews ) \
+{ \
+    struct pipe_sampler_view *cso[PIPE_MAX_SHADER_SAMPLER_VIEWS]; \
+    unsigned i, k; \
+    struct pipe_context *pipe = This->pipe; \
+ \
+    for (i = 0; i < NumViews; ++i) { \
+        k = StartSlot + i; \
+        com_ref(&This->srv[s][k], ppShaderResourceViews[i]); \
+        cso[i] = This->srv[s][k] ? \
+            This->srv[s][k]->sv : NULL; \
+    } \
+    pipe->set_##t##_sampler_views(pipe, StartSlot, NumViews, cso); \
+} \
+void WINAPI \
+D3D11DeviceContext_##n##GetShaderResources( struct D3D11DeviceContext *This, \
+                                            UINT StartSlot, \
+                                            UINT NumViews, \
+                                            ID3D11ShaderResourceView **ppShaderResourceViews ) \
+{ \
+    unsigned i, k; \
+ \
+    assert(ppShaderResourceViews || NumViews == 0); \
+    for (i = 0; i < NumViews; ++i) { \
+        k = StartSlot + i; \
+        com_set(&ppShaderResourceViews[i], This->srv[s][k]); \
+    } \
+}
+IMPLEMENT_SETGETSHADERRESOURCES(VS, vertex, PIPE_SHADER_VERTEX);
+IMPLEMENT_SETGETSHADERRESOURCES(HS, hull, PIPE_SHADER_HULL);
+IMPLEMENT_SETGETSHADERRESOURCES(DS, domain, PIPE_SHADER_DOMAIN);
+IMPLEMENT_SETGETSHADERRESOURCES(GS, geometry, PIPE_SHADER_GEOMETRY);
+IMPLEMENT_SETGETSHADERRESOURCES(PS, fragment, PIPE_SHADER_FRAGMENT);
+IMPLEMENT_SETGETSHADERRESOURCES(CS, compute, PIPE_SHADER_COMPUTE);
+
 
 void WINAPI
 D3D11DeviceContext_DrawIndexed( struct D3D11DeviceContext *This,
@@ -161,15 +219,15 @@ D3D11DeviceContext_DrawIndexed( struct D3D11DeviceContext *This,
 {
     struct pipe_draw_info *info = &This->ia.draw;
 
-    info.indexed = TRUE;
-    info.start = StartIndexLocation;
-    info.count = IndexCount;
-    info.start_instance = 0;
-    info.instance_count = 1;
-    info.index_bias = BaseVertexLocation;
-    info.primitive_restart = TRUE;
+    info->indexed = TRUE;
+    info->start = StartIndexLocation;
+    info->count = IndexCount;
+    info->start_instance = 0;
+    info->instance_count = 1;
+    info->index_bias = BaseVertexLocation;
+    info->primitive_restart = TRUE;
 
-    This->pipe->draw(This->pipe, &info);
+    This->pipe->draw(This->pipe, info);
 }
 
 void WINAPI
@@ -179,13 +237,101 @@ D3D11DeviceContext_Draw( struct D3D11DeviceContext *This,
 {
     struct pipe_draw_info *info = &This->ia.draw;
 
-    info.indexed = FALSE;
-    info.start = StartVertexLocation;
-    info.count = VertexCount;
-    info.start_instance = 0;
+    info->indexed = FALSE;
+    info->start = StartVertexLocation;
+    info->count = VertexCount;
+    info->start_instance = 0;
+    info->instance_count = 1;
+    info->index_bias = 0;
+    info->primitive_restart = FALSE;
+
+    This->pipe->draw(This->pipe, info);
+}
+
+void WINAPI
+D3D11DeviceContext_DrawIndexedInstanced( struct D3D11DeviceContext *This,
+                                         UINT IndexCountPerInstance,
+                                         UINT InstanceCount,
+                                         UINT StartIndexLocation,
+                                         INT BaseVertexLocation,
+                                         UINT StartInstanceLocation )
+{
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info->indexed = TRUE;
+    info->start = StartIndexLocation;
+    info->count = IndexCountPerInstance;
+    info->start_instance = StartInstanceLocation;
+    info->instance_count = InstanceCount;
+    info->index_bias = BaseVertexLocation;
+    info->primitive_restart = TRUE;
+
+    This->pipe->draw(This->pipe, info);
+}
+
+void WINAPI
+D3D11DeviceContext_DrawInstanced( struct D3D11DeviceContext *This,
+                                  UINT VertexCountPerInstance,
+                                  UINT InstanceCount,
+                                  UINT StartVertexLocation,
+                                  UINT StartInstanceLocation )
+{
+    struct pipe_draw_info *info = &This->ia.draw;
+
+    info->indexed = FALSE;
+    info->start = StartVertexLocation;
+    info->count = VertexCountPerInstance;
+    info->start_instance = StartInstanceLocation;
+    info->instance_count = InstanceCount;
+    info->index_bias = 0;
+    info->primitive_restart = FALSE;
+
+    This->pipe->draw(This->pipe, info);
+}
+
+void WINAPI
+D3D11DeviceContext_DrawAuto( struct D3D11DeviceContext *This )
+{
+    struct pipe_draw_info info;
+
+    assert(This->ia.buffer[0] && This->ia.buffer[0]->so_target);
+
+    memset(&info, 0, sizeof(info));
+    info.mode = This->ia.draw.mode;
     info.instance_count = 1;
-    info.index_bias = 0;
-    info.primitive_restart = FALSE;
+    info.max_index = ~0;
+    info.count_from_stream_output = This->ia.buffer[0]->so_target;
+
+    This->pipe->draw(This->pipe, &info);
+}
+
+void WINAPI
+D3D11DeviceContext_DrawIndexedInstancedIndirect( struct D3D11DeviceContext *This,
+                                                 ID3D11Buffer *pBufferForArgs,
+                                                 UINT AlignedByteOffsetForArgs )
+{
+    struct D3D11Buffer *buf = D3D11Buffer(pBufferForArgs);
+    struct pipe_draw_info info;
+
+    memset(&info, 0, sizeof(info));
+    info.indexed = TRUE;
+    info.indirect = buf->resource;
+    info.indirect_offset = AlignedByteOffsetForArgs;
+
+    This->pipe->draw(This->pipe, &info);
+}
+
+void WINAPI
+D3D11DeviceContext_DrawInstancedIndirect( struct D3D11DeviceContext *This,
+                                          ID3D11Buffer *pBufferForArgs,
+                                          UINT AlignedByteOffsetForArgs )
+{
+    struct D3D11Buffer *buf = D3D11Buffer(pBufferForArgs);
+    struct pipe_draw_info info;
+
+    memset(&info, 0, sizeof(info));
+    info.indirect = buf->resource;
+    info.indirect_offset = AlignedByteOffsetForArgs;
 
     This->pipe->draw(This->pipe, &info);
 }
@@ -268,6 +414,14 @@ D3D11DeviceContext_IASetInputLayout( struct D3D11DeviceContext *This,
 }
 
 void WINAPI
+D3D11DeviceContext_IAGetInputLayout( struct D3D11DeviceContext *This,
+                                     ID3D11InputLayout **ppInputLayout )
+{
+    assert(ppInputLayout);
+    com_set(ppInputLayout, This->ia.so);
+}
+
+void WINAPI
 D3D11DeviceContext_IASetVertexBuffers( struct D3D11DeviceContext *This,
                                        UINT StartSlot,
                                        UINT NumBuffers,
@@ -309,7 +463,7 @@ D3D11DeviceContext_IAGetVertexBuffers( struct D3D11DeviceContext *This,
         const unsigned b = StartSlot + i;
 
         if (ppVertexBuffers)
-            com_ref(&ppVertexBuffers[i], This->ia.buffer[b]);
+            com_set(&ppVertexBuffers[i], This->ia.buffer[b]);
         if (pStrides)
             pStrides[i] = This->ia.vtxbuf[b].stride;
         if (pOffsets)
@@ -373,47 +527,6 @@ D3D11DeviceContext_IAGetIndexBuffer( struct D3D11DeviceContext *This,
 }
 
 void WINAPI
-D3D11DeviceContext_DrawIndexedInstanced( struct D3D11DeviceContext *This,
-                                         UINT IndexCountPerInstance,
-                                         UINT InstanceCount,
-                                         UINT StartIndexLocation,
-                                         INT BaseVertexLocation,
-                                         UINT StartInstanceLocation )
-{
-    struct pipe_draw_info *info = &This->ia.draw;
-
-    info.indexed = TRUE;
-    info.start = StartIndexLocation;
-    info.count = IndexCountPerInstance;
-    info.start_instance = StartInstanceLocation;
-    info.instance_count = InstanceCount;
-    info.index_bias = BaseVertexLocation;
-    info.primitive_restart = TRUE;
-
-    This->pipe->draw(This->pipe, &info);
-}
-
-void WINAPI
-D3D11DeviceContext_DrawInstanced( struct D3D11DeviceContext *This,
-                                  UINT VertexCountPerInstance,
-                                  UINT InstanceCount,
-                                  UINT StartVertexLocation,
-                                  UINT StartInstanceLocation )
-{
-    struct pipe_draw_info *info = &This->ia.draw;
-
-    info.indexed = FALSE;
-    info.start = StartVertexLocation;
-    info.count = VertexCountPerInstance;
-    info.start_instance = StartInstanceLocation;
-    info.instance_count = InstanceCount;
-    info.index_bias = 0;
-    info.primitive_restart = FALSE;
-
-    This->pipe->draw(This->pipe, &info);
-}
-
-void WINAPI
 D3D11DeviceContext_IASetPrimitiveTopology( struct D3D11DeviceContext *This,
                                            D3D11_PRIMITIVE_TOPOLOGY Topology )
 {
@@ -469,42 +582,6 @@ D3D11DeviceContext_IAGetPrimitiveTopology( struct D3D11DeviceContext *This,
 }
 
 void WINAPI
-D3D11DeviceContext_VSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_VSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
 D3D11DeviceContext_OMSetRenderTargets( struct D3D11DeviceContext *This,
                                        UINT NumViews,
                                        ID3D11RenderTargetView **ppRenderTargetViews,
@@ -539,7 +616,14 @@ D3D11DeviceContext_OMGetRenderTargets( struct D3D11DeviceContext *This,
                                        ID3D11RenderTargetView **ppRenderTargetViews,
                                        ID3D11DepthStencilView **ppDepthStencilView )
 {
-    STUB();
+    if (ppRenderTargetViews) {
+        unsigned i;
+        assert(NumViews < Elements(This->om.rtv));
+        for (i = 0; i < NumViews; ++i)
+            com_set(&ppRenderTargetViews[i], This->om.rtv[i]);
+    }
+    if (ppDepthStencilView)
+        com_set(ppDepthStencilView, This->om.dsv);
 }
 
 void WINAPI
@@ -581,7 +665,22 @@ D3D11DeviceContext_OMGetRenderTargetsAndUnorderedAccessViews( struct D3D11Device
                                                               UINT NumUAVs,
                                                               ID3D11UnorderedAccessView **ppUnorderedAccessViews )
 {
-    STUB();
+    unsigned i, b;
+
+    if (ppRenderTargetViews) {
+        assert(NumRTVs < Elements(This->om.rtv));
+        for (i = 0; i < NumRTVs; ++i)
+            com_set(ppRenderTargetViews[i], This->om.rtv[i]);
+    }
+    if (ppDepthStencilView)
+        com_set(ppDepthStencilView, This->om.dsv);
+
+    if (ppUnorderedAccessViews) {
+        for (i = 0; i < NumUAVs; ++i) {
+            b = UAVStartSlot + i;
+            com_set(&ppUnorderedAccesViews[i], This->om.uav[b]);
+        }
+    }
 }
 
 void WINAPI
@@ -615,7 +714,7 @@ D3D11DeviceContext_OMGetBlendState( struct D3D11DeviceContext *This,
                                     UINT *pSampleMask )
 {
     if (ppBlendState)
-        com_ref(ppBlendState, This->om.bs);
+        com_set(ppBlendState, This->om.bs);
     if (BlendFactor)
         memcpy(BlendFactor, This->om.blend_color.color, sizeof(BlendFactor));
     if (pSampleMask)
@@ -649,40 +748,9 @@ D3D11DeviceContext_OMGetDepthStencilState( struct D3D11DeviceContext *This,
                                            UINT *pStencilRef )
 {
     if (ppDepthStencilState)
-        com_ref(ppDepthStencilState, This->om.ds);
+        com_set(ppDepthStencilState, This->om.ds);
     if (pStencilRef)
         *pStencilRef = This->om.stencil_ref;
-}
-
-void WINAPI
-D3D11DeviceContext_SOSetTargets( struct D3D11DeviceContext *This,
-                                 UINT NumBuffers,
-                                 ID3D11Buffer **ppSOTargets,
-                                 UINT *pOffsets )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DrawAuto( struct D3D11DeviceContext *This )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DrawIndexedInstancedIndirect( struct D3D11DeviceContext *This,
-                                                 ID3D11Buffer *pBufferForArgs,
-                                                 UINT AlignedByteOffsetForArgs )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DrawInstancedIndirect( struct D3D11DeviceContext *This,
-                                          ID3D11Buffer *pBufferForArgs,
-                                          UINT AlignedByteOffsetForArgs )
-{
-    STUB();
 }
 
 void WINAPI
@@ -721,7 +789,8 @@ void WINAPI
 D3D11DeviceContext_RSGetState( struct D3D11DeviceContext *This,
                                ID3D11RasterizerState **ppRasterizerState )
 {
-    com_ref(ppRasterizerState, This->rs.so);
+    assert(ppRasterizerState);
+    com_set(ppRasterizerState, This->rs.so);
 }
 
 void WINAPI
@@ -1083,288 +1152,23 @@ D3D11DeviceContext_ExecuteCommandList( struct D3D11DeviceContext *This,
 }
 
 void WINAPI
-D3D11DeviceContext_HSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_HSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_CSSetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
 D3D11DeviceContext_CSSetUnorderedAccessViews( struct D3D11DeviceContext *This,
                                               UINT StartSlot,
                                               UINT NumUAVs,
                                               ID3D11UnorderedAccessView **ppUnorderedAccessViews,
                                               UINT *pUAVInitialCounts )
 {
-    STUB();
-}
+    struct pipe_surface *surf[16];
+    unsigned i, b;
 
-void WINAPI
-D3D11DeviceContext_CSSetShader( struct D3D11DeviceContext *This,
-                                ID3D11ComputeShader *pComputeShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT NumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_CSSetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_VSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_PSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_PSGetShader( struct D3D11DeviceContext *This,
-                                ID3D11PixelShader **ppPixelShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT *pNumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_PSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_VSGetShader( struct D3D11DeviceContext *This,
-                                ID3D11VertexShader **ppVertexShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT *pNumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_PSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_IAGetInputLayout( struct D3D11DeviceContext *This,
-                                     ID3D11InputLayout **ppInputLayout )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSGetShader( struct D3D11DeviceContext *This,
-                                ID3D11GeometryShader **ppGeometryShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT *pNumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_VSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_VSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GetPredication( struct D3D11DeviceContext *This,
-                                   ID3D11Predicate **ppPredicate,
-                                   BOOL *pPredicateValue )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_GSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_SOGetTargets( struct D3D11DeviceContext *This,
-                                 UINT NumBuffers,
-                                 ID3D11Buffer **ppSOTargets )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_HSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_HSGetShader( struct D3D11DeviceContext *This,
-                                ID3D11HullShader **ppHullShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT *pNumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_HSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_HSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSGetShader( struct D3D11DeviceContext *This,
-                                ID3D11DomainShader **ppDomainShader,
-                                ID3D11ClassInstance **ppClassInstances,
-                                UINT *pNumClassInstances )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_DSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
-{
-    STUB();
-}
-
-void WINAPI
-D3D11DeviceContext_CSGetShaderResources( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumViews,
-                                         ID3D11ShaderResourceView **ppShaderResourceViews )
-{
-    STUB();
+    for (i = 0; i < NumUAVs; ++i) {
+        b = StartSlot + i;
+        assert(b < Elements(This->uav));
+        com_ref(&This->uav[b], ppUnorderedAccessViews[i]);
+        surf[i] = This->uav[b] ?
+            This->uav[b]->surface : NULL;
+    }
+    This->pipe->set_compute_resources(This->pipe, surf);
 }
 
 void WINAPI
@@ -1373,7 +1177,26 @@ D3D11DeviceContext_CSGetUnorderedAccessViews( struct D3D11DeviceContext *This,
                                               UINT NumUAVs,
                                               ID3D11UnorderedAccessView **ppUnorderedAccessViews )
 {
-    STUB();
+    unsigned i, b;
+
+    assert(ppUnorderedAccessViews || NumUAVs == 0);
+    for (i = 0; i < NumUAVs; ++i) {
+        b = StartSlot + i;
+        com_set(&ppUnorderedAccessViews[i], This->uav[b]);
+    }
+}
+
+void WINAPI
+D3D11DeviceContext_CSSetShader( struct D3D11DeviceContext *This,
+                                ID3D11ComputeShader *pComputeShader,
+                                ID3D11ClassInstance **ppClassInstances,
+                                UINT NumClassInstances )
+{
+    com_ref(&This->cs, pComputeShader);
+    if (This->cs)
+        This->pipe->bind_compute_state(This->pipe, This->cs.so.prog);
+    else
+        This->pipe->bind_compute_state(This->pipe, NULL);
 }
 
 void WINAPI
@@ -1382,25 +1205,55 @@ D3D11DeviceContext_CSGetShader( struct D3D11DeviceContext *This,
                                 ID3D11ClassInstance **ppClassInstances,
                                 UINT *pNumClassInstances )
 {
-    STUB();
+    if (ppComputeShader)
+        com_set(ppComputeShader, This->cs);
+    if (pNumClassInstances)
+        *pNumClassInstances = 0;
 }
 
 void WINAPI
-D3D11DeviceContext_CSGetSamplers( struct D3D11DeviceContext *This,
-                                  UINT StartSlot,
-                                  UINT NumSamplers,
-                                  ID3D11SamplerState **ppSamplers )
+D3D11DeviceContext_SOSetTargets( struct D3D11DeviceContext *This,
+                                 UINT NumBuffers,
+                                 ID3D11Buffer **ppSOTargets,
+                                 UINT *pOffsets )
 {
-    STUB();
+    struct pipe_context *pipe = This->pipe;
+    unsigned i;
+    unsigned append = 0;
+
+    for (i = 0; i < NumBuffers; ++i) {
+        D3D11Buffer *buf = D3D11Buffer(ppSOTargets[i]);
+
+        com_ref(&This->so.buffer[i], buf);
+        This->so.target[i] = buf ? buf->so_target : NULL;
+        if (!buf)
+            continue;
+        if (pOffsets[i] == -1) {
+            append |= 1 << i;
+            assert(This->so.target[i]);
+        } else
+        if (!buf->so_target || buf->so_target->buffer_offset != pOffsets[i]) {
+            buf->so_target = pipe->create_stream_output_target(pipe,
+                buf->resource, pOffsets[i], buf->desc.ByteWidth - pOffset[i]);
+            This->so.target[i] = buf->so_target;
+        }
+    }
+    for (; i < 4; ++i) {
+        com_ref(&This->so.buffer[i], NULL);
+        This->so.target[i] = NULL;
+    }
+    pipe->set_stream_output_targets(pipe, NumBuffers, This->so.target, append);
 }
 
 void WINAPI
-D3D11DeviceContext_CSGetConstantBuffers( struct D3D11DeviceContext *This,
-                                         UINT StartSlot,
-                                         UINT NumBuffers,
-                                         ID3D11Buffer **ppConstantBuffers )
+D3D11DeviceContext_SOGetTargets( struct D3D11DeviceContext *This,
+                                 UINT NumBuffers,
+                                 ID3D11Buffer **ppSOTargets )
 {
-    STUB();
+    unsigned i;
+    assert(ppSOTargets);
+    for (i = 0; i < NumBuffers; ++i)
+        com_set(&ppSOTargets[i], This->so.buffer[i]);
 }
 
 static void

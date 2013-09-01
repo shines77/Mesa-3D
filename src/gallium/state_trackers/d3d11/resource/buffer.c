@@ -66,6 +66,7 @@ D3D11Buffer_ctor( struct D3D11Buffer *This,
 void
 D3D11Buffer_dtor( struct D3D11Buffer *This )
 {
+    pipe_stream_output_target_reference(&This->so_target, NULL);
     D3D11Resource_dtor(&This->base);
 }
 

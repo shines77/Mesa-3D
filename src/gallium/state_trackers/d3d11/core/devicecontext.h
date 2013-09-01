@@ -35,6 +35,7 @@ struct D3D11DeviceContext
         uint8_t stencil_ref;
         struct pipe_blend_color blend_color;
         uint32_t sample_mask;
+        struct D3D11UnorderedAccessView *uav[16];
     } om;
 
     struct D3D11VertexShader   *vs;
@@ -51,6 +52,8 @@ struct D3D11DeviceContext
 
     struct D3D11SamplerState *ss[6][PIPE_MAX_SAMPLERS];
     struct D3D11ShaderResourceView *srv[6][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+    void *ss_cso[6][PIPE_MAX_SAMPLERS];
+    struct pipe_sampler_view *srv_cso[6][PIPE_MAX_SHADER_SAMPLER_VIEWS];
 
     struct D3D11UnorderedAccessView *uav[16];
 
@@ -58,6 +61,9 @@ struct D3D11DeviceContext
         struct D3D11Buffer *buffer[PIPE_MAX_SO_BUFFERS];
         struct pipe_stream_output_target *target[PIPE_MAX_SO_BUFFERS];
     } so;
+
+    struct D3D11Predicate *predicate;
+    BOOL predicate_value;
 };
 static INLINE struct D3D11DeviceContext *D3D11DeviceContext(void *ptr)
 {

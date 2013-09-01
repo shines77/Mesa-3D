@@ -80,10 +80,23 @@ D3D11DeviceContext_SetPredication( struct D3D11DeviceContext *This,
 
     if (!query->base.is_predicate)
         return;
+    com_ref(&This->predicate, pPredicate);
+    This->predicate_value = PredicateValue;
 
     mode = PIPE_RENDER_COND_BY_REGION_WAIT;
     if (query->desc.MiscFlags & D3D11_QUERY_MISC_PREDICATEHINT)
         mode = PIPE_RENDER_COND_BY_REGION_NO_WAIT;
 
     This->pipe->render_condition(This->pipq, async->pq, PredicateValue, mode);
+}
+
+void WINAPI
+D3D11DeviceContext_GetPredication( struct D3D11DeviceContext *This,
+                                   ID3D11Predicate **ppPredicate,
+                                   BOOL *pPredicateValue )
+{
+    if (ppPredicate)
+        com_set(ppPredicate, This->predicate);
+    if (pPredicateValue)
+        *pPredicateValue = This->predicate_value;
 }
