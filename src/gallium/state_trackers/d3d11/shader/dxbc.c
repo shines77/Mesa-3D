@@ -97,7 +97,7 @@ dxbc_parse_signature(const struct dxbc_chunk_header *chunk, D3D11_SIGNATURE_PARA
 }
 
 HRESULT
-dxbc_parse(struct d3d11_shader_info *info, const uint8_t *bytecode, SIZE_T size)
+dxbc_parse(struct d3d11_shader_blob *info, const uint8_t *bytecode, SIZE_T size)
 {
     struct dxbc_container_header *hdr = bytecode;
     struct dxbc_chunk_header *chunk;

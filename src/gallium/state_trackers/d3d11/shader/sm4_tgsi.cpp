@@ -175,14 +175,107 @@ struct sm4_op_info
    unsigned numSrc;
 };
 
+/*
+        if (ureg_src_undefined(tx->regs.primid))
+            tx->regs.sv_primid = ureg_DECL_system_value(ureg, tx->regs.num_sv++, TGSI_SEMANTIC_PRIMID, 0);
+        return tx->regs.sv_primid;
+*/
 struct ureg_src
 sm4_tx_src(struct sm4_token_operand op)
 {
+    switch (op.File) {
+    case SM4_FILE_CONSTANT_BUFFER:
+    case SM4_FILE_CYCLE_COUNTER:
+    case SM4_FILE_FUNCTION_BODY:
+    case SM4_FILE_FUNCTION_INPUT:
+    case SM4_FILE_FUNCTION_OUTPUT:
+    case SM4_FILE_FUNCTION_TABLE:
+    case SM4_FILE_IMMEDIATE32:
+    case SM4_FILE_IMMEDIATE64:
+    case SM4_FILE_IMMEDIATE_CONSTANT_BUFFER:
+    case SM4_FILE_INDEXABLE_TEMP:
+    case SM4_FILE_INPUT:
+    case SM4_FILE_INPUT_CONTROL_POINT:
+    case SM4_FILE_INPUT_COVERAGE_MASK:
+    case SM4_FILE_INPUT_DOMAIN_POINT:
+    case SM4_FILE_INPUT_FORK_INSTANCE_ID:
+    case SM4_FILE_INPUT_GS_INSTANCE_ID:
+    case SM4_FILE_INPUT_JOIN_INSTANCE_ID:
+    case SM4_FILE_INPUT_PATCH_CONSTANT:
+    case SM4_FILE_INPUT_PRIMITIVEID:
+    case SM4_FILE_INPUT_THREAD_GROUP_ID:
+    case SM4_FILE_INPUT_THREAD_ID:
+    case SM4_FILE_INPUT_THREAD_ID_IN_GROUP:
+    case SM4_FILE_INPUT_THREAD_ID_IN_GROUP_FLATTENED:
+    case SM4_FILE_INTERFACE:
+    case SM4_FILE_LABEL:
+    case SM4_FILE_OUTPUT:
+    case SM4_FILE_OUTPUT_CONTROL_POINT:
+    case SM4_FILE_OUTPUT_CONTROL_POINT_ID:
+    case SM4_FILE_OUTPUT_COVERAGE_MASK:
+    case SM4_FILE_OUTPUT_DEPTH:
+    case SM4_FILE_OUTPUT_DEPTH_GREATER_EQUAL:
+    case SM4_FILE_OUTPUT_DEPTH_LESS_EQUAL:
+    case SM4_FILE_RESOURCE:
+    case SM4_FILE_SAMPLER:
+    case SM4_FILE_STREAM:
+    case SM4_FILE_TEMP:
+    case SM4_FILE_THIS_POINTER:
+    case SM4_FILE_THREAD_GROUP_SHARED_MEMORY:
+    case SM4_FILE_UNORDERED_ACCESS_VIEW:
+        break;
+    default:
+        break;
+    }
 }
 
 struct ureg_dst
 sm4_tx_dst(struct sm4_token_operand op)
 {
+    switch (op.File) {
+    case SM4_FILE_CONSTANT_BUFFER:
+    case SM4_FILE_CYCLE_COUNTER:
+    case SM4_FILE_FUNCTION_BODY:
+    case SM4_FILE_FUNCTION_INPUT:
+    case SM4_FILE_FUNCTION_OUTPUT:
+    case SM4_FILE_FUNCTION_TABLE:
+    case SM4_FILE_IMMEDIATE32:
+    case SM4_FILE_IMMEDIATE64:
+    case SM4_FILE_IMMEDIATE_CONSTANT_BUFFER:
+    case SM4_FILE_INDEXABLE_TEMP:
+    case SM4_FILE_INPUT:
+    case SM4_FILE_INPUT_CONTROL_POINT:
+    case SM4_FILE_INPUT_COVERAGE_MASK:
+    case SM4_FILE_INPUT_DOMAIN_POINT:
+    case SM4_FILE_INPUT_FORK_INSTANCE_ID:
+    case SM4_FILE_INPUT_GS_INSTANCE_ID:
+    case SM4_FILE_INPUT_JOIN_INSTANCE_ID:
+    case SM4_FILE_INPUT_PATCH_CONSTANT:
+    case SM4_FILE_INPUT_PRIMITIVEID:
+    case SM4_FILE_INPUT_THREAD_GROUP_ID:
+    case SM4_FILE_INPUT_THREAD_ID:
+    case SM4_FILE_INPUT_THREAD_ID_IN_GROUP:
+    case SM4_FILE_INPUT_THREAD_ID_IN_GROUP_FLATTENED:
+    case SM4_FILE_INTERFACE:
+    case SM4_FILE_LABEL:
+    case SM4_FILE_OUTPUT:
+    case SM4_FILE_OUTPUT_CONTROL_POINT:
+    case SM4_FILE_OUTPUT_CONTROL_POINT_ID:
+    case SM4_FILE_OUTPUT_COVERAGE_MASK:
+    case SM4_FILE_OUTPUT_DEPTH:
+    case SM4_FILE_OUTPUT_DEPTH_GREATER_EQUAL:
+    case SM4_FILE_OUTPUT_DEPTH_LESS_EQUAL:
+    case SM4_FILE_RESOURCE:
+    case SM4_FILE_SAMPLER:
+    case SM4_FILE_STREAM:
+    case SM4_FILE_TEMP:
+    case SM4_FILE_THIS_POINTER:
+    case SM4_FILE_THREAD_GROUP_SHARED_MEMORY:
+    case SM4_FILE_UNORDERED_ACCESS_VIEW:
+        break;
+    default:
+        break;
+    }
 }
 
 OPCODE_HANDLER(LABEL)
@@ -252,12 +345,12 @@ unsigned sm4_to_tgsi_opcode[] =
    /* ENDIF */       TGSI_OPCODE_ENDIF, 0, 0,
    /* ENDLOOP */     TGSI_OPCODE_ENDLOOP, 0, 0,
    /* ENDSWITCH */   TGSI_OPCODE_ENDSWITCH, 0, 0,
-   /* EQ */          TGSI_OPCODE_SEQ, 1, 2,
+   /* EQ */          TGSI_OPCODE_FSEQ, 1, 2,
    /* EXP */         TGSI_OPCODE_EX2, 1, 1,
    /* FRC */         TGSI_OPCODE_FRC, 1, 1,
    /* FTOI */        TGSI_OPCODE_F2I, 1, 1,
    /* FTOU */        TGSI_OPCODE_F2U, 1, 1,
-   /* GE */          TGSI_OPCODE_SGE, 1, 2,
+   /* GE */          TGSI_OPCODE_FSGE, 1, 2,
    /* IADD */        TGSI_OPCODE_UADD, 1, 2,
    /* IF */          TGSI_OPCODE_IF,
    /* IEQ */         TGSI_OPCODE_USEQ, 1, 2,
@@ -277,7 +370,7 @@ unsigned sm4_to_tgsi_opcode[] =
    /* LD_MS */       TGSI_OPCODE_SAMPLE_I_MS,
    /* LOG */         TGSI_OPCODE_LG2, 1, 1,
    /* LOOP */        TGSI_OPCODE_BGNLOOP,
-   /* LT */          TGSI_OPCODE_SLT, 1, 2,
+   /* LT */          TGSI_OPCODE_FSLT, 1, 2,
    /* MAD */         TGSI_OPCODE_MAD, 1, 3,
    /* MIN */         TGSI_OPCODE_MIN, 1, 2,
    /* MAX */         TGSI_OPCODE_MAX, 1, 2,
@@ -285,7 +378,7 @@ unsigned sm4_to_tgsi_opcode[] =
    /* MOV */         TGSI_OPCODE_MOV, 1, 1,
    /* MOVC */        TGSI_OPCODE_UCMP, 1, 3,
    /* MUL */         TGSI_OPCODE_MUL, 1, 2,
-   /* NE */          TGSI_OPCODE_SNE, 1, 2,
+   /* NE */          TGSI_OPCODE_FSNE, 1, 2,
    /* NOP */         TGSI_OPCODE_NOP,
    /* NOT */         TGSI_OPCODE_NOT, 1, 1,
    /* OR */          TGSI_OPCODE_OR, 1, 2,

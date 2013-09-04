@@ -16,7 +16,10 @@ static INLINE struct D3D11UnorderedAccessView *D3D11UnorderedAccessView(void *pt
 }
 
 HRESULT
-D3D11UnorderedAccessView_new( struct D3D11Device *, struct D3D11UnorderedAccessView **ppOut );
+D3D11UnorderedAccessView_new( struct D3D11Device *,
+                              struct D3D11Resource *,
+                              const D3D11_UNORDERED_ACCESS_VIEW_DESC *pDesc,
+                              struct D3D11UnorderedAccessView **ppOut );
 
 void WINAPI
 D3D11UnorderedAccessView_GetDesc( struct D3D11UnorderedAccessView *This,

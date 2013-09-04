@@ -22,13 +22,103 @@
 
 #include "device.h"
 
+static unsigned caps_d3d9_3[] =
+{
+    UTIL_CHECK_INT(MAX_RENDER_TARGETS, 4),
+    UTIL_CHECK_CAP(MIXED_COLORBUFFER_FORMATS),
+    UTIL_CHECK_CAP(BLEND_EQUATION_SEPARATE),
+    UTIL_CHECK_CAP(INDEP_BLEND_ENABLE),
+    UTIL_CHECK_CAP(TWO_SIDED_STENCIL),
+    UTIL_CHECK_INT(MAX_TEXTURE_2D_LEVELS, 12),
+    UTIL_CHECK_INT(MAX_TEXTURE_CUBE_LEVELS, 12),
+    UTIL_CHECK_INT(MAX_TEXTURE_3D_LEVELS, 8),
+    UTIL_CHECK_CAP(ANISOTROPIC_FILTER),
+    UTIL_CHECK_FLOAT(MAX_TEXTURE_ANISOTROPY, 16.0f),
+    UTIL_CHECK_CAP(TEXTURE_MIRROR_CLAMP),
+    UTIL_CHECK_CAP(VERTEX_ELEMENT_INSTANCE_DIVISOR),
+    UTIL_CHECK_CAP(OCCLUSION_QUERY),
+    UTIL_CHECK_CAP(SM3),
+    UTIL_CHECK_SHADER(VERTEX, MAX_INPUTS, 16),
+    UTIL_CHECK_TERMINATE
+};
+static unsigned caps_d3d10_0[] =
+{
+    /* OM */
+    UTIL_CHECK_INT(MAX_RENDER_TARGETS, 8),
+    UTIL_CHECK_INT(MAX_DUAL_SOURCE_RENDER_TARGETS, 1),
+    UTIL_CHECK_CAP(INDEP_BLEND_FUNC),
+    /* RS */
+    UTIL_CHECK_INT(MAX_VIEWPORTS, 16),
+    UTIL_CHECK_CAP(DEPTH_CLIP_DISABLE),
+    /* TEX */
+    UTIL_CHECK_INT(MAX_TEXTURE_2D_LEVELS, 13),
+    UTIL_CHECK_INT(MAX_TEXTURE_CUBE_LEVELS, 13),
+    UTIL_CHECK_INT(MAX_TEXTURE_3D_LEVELS, 11),
+    UTIL_CHECK_INT(MAX_TEXTURE_ARRAY_LAYERS, 512),
+    UTIL_CHECK_INT(MAX_TEXTURE_BUFFER_SIZE, 2048),
+    UTIL_CHECK_CAP(CUBE_MAP_ARRAY),
+    UTIL_CHECK_CAP(TEXTURE_BUFFER_OBJECTS),
+    UTIL_CHECK_CAP(TEXTURE_MULTISAMPLE),
+    UTIL_CHECK_CAP(TEXTURE_SHADOW_MAP),
+    UTIL_CHECK_CAP(SEAMLESS_CUBE_MAP),
+    /* SO */
+    UTIL_CHECK_INT(MAX_STREAM_OUTPUT_BUFFERS, 4),
+    UTIL_CHECK_CAP(STREAM_OUTPUT_PAUSE_RESUME),
+    /* SHADER */
+    UTIL_CHECK_INT(GLSL_FEATURE_LEVEL, 150),
+    UTIL_CHECK_INT(MAX_TEXEL_OFFSET, 7),
+    UTIL_CHECK_CAP(TGSI_INSTANCEID),
+    UTIL_CHECK_SHADER(VERTEX, MAX_CONTROL_FLOW_DEPTH, 64),
+    UTIL_CHECK_SHADER(VERTEX, MAX_CONST_BUFFERS, 14),
+    UTIL_CHECK_SHADER(VERTEX, MAX_TEXTURE_SAMPLERS, 16),
+    UTIL_CHECK_SHADER(GEOMETRY, MAX_INPUTS, 16),
+    UTIL_CHECK_SHADER(FRAGMENT, MAX_INPUTS, 32),
+    UTIL_CHECK_SHADER(FRAGMENT, INTEGERS, 1),
+    /* DRAW */
+    UTIL_CHECK_CAP(CONDITIONAL_RENDER),
+    UTIL_CHECK_CAP(PRIMITIVE_RESTART),
+    UTIL_CHECK_CAP(START_INSTANCE),
+    /* QUERY */
+    UTIL_CHECK_CAP(QUERY_TIMESTAMP),
+    UTIL_CHECK_CAP(QUERY_PIPELINE_STATISTICS),
+    UTIL_CHECK_TERMINATE
+};
+static unsigned caps_d3d11_0[] =
+{
+    UTIL_CHECK_INT(MAX_TEXTURE_2D_LEVELS, 14),
+    UTIL_CHECK_INT(MAX_TEXTURE_CUBE_LEVELS, 14),
+    UTIL_CHECK_INT(MAX_TEXTURE_ARRAY_LAYERS, 2048),
+    UTIL_CHECK_INT(GLSL_FEATURE_LEVEL, 400),
+    UTIL_CHECK_SHADER(VERTEX, MAX_CONST_BUFFERS, 15),
+    UTIL_CHECK_SHADER(VERTEX, MAX_INPUTS, 32),
+    UTIL_CHECK_TERMINATE
+};
+
+static boolean
+D3D11Device_DetermineFeatureLevel( struct D3D11Device *This )
+{
+    if (!util_check_caps(This->screen, caps_d3d9_3))
+        return FALSE;
+    if (!util_check_caps(This->screen, caps_d3d10_0))
+        This->feature_level = D3D_FEATURE_LEVEL_9_3;
+    else
+    if (!util_check_caps(This->screen, caps_d3d11_0))
+        This->feature_level = D3D_FEATURE_LEVEL_10_0;
+    else
+        This->feature_level = D3D_FEATURE_LEVEL_11_0;
+    return TRUE;
+}
+
 HRESULT
 D3D11Device_ctor( struct D3D11Device *This,
-struct D3D11UnknownParams *pParams)
+                  struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = Unknown_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+
+    if (!D3D11Device_DetermineFeatureLevel(This))
+        return_error(DXGI_ERROR_UNSUPPORTED);
 
     hr = D3D11DeviceInit_BlendState(This);
     if (FAILED(hr))
@@ -58,7 +148,27 @@ D3D11Device_CreateBuffer( struct D3D11Device *This,
                           D3D11_SUBRESOURCE_DATA *pInitialData,
                           ID3D11Buffer **ppBuffer )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Buffer *pBuf;
+    HRESULT hr;
+
+    if (!pInitialData && pDesc->Usage == D3D11_USAGE_IMMUTABLE)
+        return_error(E_INVALIDARG);
+
+    hr = D3D11Buffer_new(This, pDesc, &pBuf);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppBuffer = (ID3D11Buffer *)pBuf;
+
+    if (pInitialData) {
+        struct pipe_context *pipe = This->pipe2;
+        struct pipe_box box;
+        u_box_1d(0, pDesc->ByteWidth, &box);
+        pipe->transfer_inline_write(pipe, pBuf->base.resource, 0,
+                                    PIPE_TRANSFER_UNSYNCHRONIZED,
+                                    &box,
+                                    pInitialData->pSysMem, 0, 0);
+    }
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -67,7 +177,33 @@ D3D11Device_CreateTexture1D( struct D3D11Device *This,
                              D3D11_SUBRESOURCE_DATA *pInitialData,
                              ID3D11Texture1D **ppTexture1D )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Texture1D *pTex;
+    HRESULT hr;
+
+    if (!pInitialData && pDesc->Usage == D3D11_USAGE_IMMUTABLE)
+        return_error(E_INVALIDARG);
+
+    hr = D3D11Texture1D_new(This, pDesc, &pTex);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppTexture1D = (ID3D11Texture1D *)pTex;
+
+    if (pInitialData) {
+        struct pipe_context *pipe = This->pipe2;
+        unsigned l, z;
+        struct pipe_box box;
+        u_box_1d(0, pDesc->Width, &box);
+        for (box.z = 0; box.z < pTex->base.resource->array_size; ++box.z) {
+            for (l = 0; l <= pTex->base.resource->last_level; ++l) {
+                pipe->transfer_inline_write(pipe, pBuf->base.resource, l,
+                                            PIPE_TRANSFER_UNSYNCHRONIZED,
+                                            &box,
+                                            pInitialData->pSysMem, 0, 0);
+                ++pInitialData;
+            }
+        }
+    }
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -76,7 +212,36 @@ D3D11Device_CreateTexture2D( struct D3D11Device *This,
                              D3D11_SUBRESOURCE_DATA *pInitialData,
                              ID3D11Texture2D **ppTexture2D )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Texture2D *pTex;
+    HRESULT hr;
+
+    if (pInitialData && pDesc->SampleDesc.Count > 1)
+        return_error(E_INVALIDARG);
+    if (!pInitialData && pDesc->Usage == D3D11_USAGE_IMMUTABLE)
+        return_error(E_INVALIDARG);
+
+    hr = D3D11Texture2D_new(This, pDesc, &pTex);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppTexture2D = (ID3D11Texture2D *)pTex;
+
+    if (pInitialData) {
+        struct pipe_context *pipe = This->pipe2;
+        unsigned l, z;
+        struct pipe_box box;
+        u_box_2d(0, 0, pDesc->Width, pDesc->Height, &box);
+        for (box.z = 0; box.z < pTex->base.resource->array_size; ++box.z) {
+            for (l = 0; l <= pTex->base.resource->last_level; ++l) {
+                pipe->transfer_inline_write(pipe, pBuf->base.resource, l,
+                                            PIPE_TRANSFER_UNSYNCHRONIZED,
+                                            &box,
+                                            pInitialData->pSysMem,
+                                            pInitialData->SysMemPitch, 0);
+                ++pInitialData;
+            }
+        }
+    }
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -85,7 +250,33 @@ D3D11Device_CreateTexture3D( struct D3D11Device *This,
                              D3D11_SUBRESOURCE_DATA *pInitialData,
                              ID3D11Texture3D **ppTexture3D )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Texture3D *pTex;
+    HRESULT hr;
+
+    if (!pInitialData && pDesc->Usage == D3D11_USAGE_IMMUTABLE)
+        return_error(E_INVALIDARG);
+
+    hr = D3D11Texture3D_new(This, pDesc, &pTex);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppTexture3D = (ID3D11Texture3D *)pTex;
+
+    if (pInitialData) {
+        struct pipe_context *pipe = This->pipe2;
+        unsigned l;
+        struct pipe_box box;
+        u_box_3d(0, 0, 0, pDesc->Width, pDesc->Height, pDesc->Depth, &box);
+        for (l = 0; l <= pTex->base.resource->last_level; ++l) {
+            pipe->transfer_inline_write(pipe, pBuf->base.resource, l,
+                                        PIPE_TRANSFER_UNSYNCHRONIZED,
+                                        &box,
+                                        pInitialData->pSysMem,
+                                        pInitialData->SysMemPitch,
+                                        pInitialData->SysMemSlicePitch);
+            ++pInitialData;
+        }
+    }
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -94,7 +285,14 @@ D3D11Device_CreateShaderResourceView( struct D3D11Device *This,
                                       D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc,
                                       ID3D11ShaderResourceView **ppSRView )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11ShaderResourceView *pSRV;
+    HRESULT hr;
+
+    hr = D3D11ShaderResourceView_new(This, D3D11Resource(pResource), pDesc, pSRV);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppSRView = (ID3D11ShaderResourceView *)pSRV;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -103,7 +301,14 @@ D3D11Device_CreateUnorderedAccessView( struct D3D11Device *This,
                                        D3D11_UNORDERED_ACCESS_VIEW_DESC *pDesc,
                                        ID3D11UnorderedAccessView **ppUAView )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11UnorderedAccessView *pUAV;
+    HRESULT hr;
+
+    hr = D3D11UnorderedAccessView_new(This, D3D11Resource(pResource), pDesc, pUAV);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppUAView = (ID3D11UnorderedAccessView *)pUAV;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -112,7 +317,14 @@ D3D11Device_CreateRenderTargetView( struct D3D11Device *This,
                                     D3D11_RENDER_TARGET_VIEW_DESC *pDesc,
                                     ID3D11RenderTargetView **ppRTView )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11RenderTargetView *pRTV;
+    HRESULT hr;
+
+    hr = D3D11RenderTargetView_new(This, D3D11Resource(pResource), pDesc, pRTV);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppRTView = (ID3D11RenderTargetView *)pRTV;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -121,7 +333,14 @@ D3D11Device_CreateDepthStencilView( struct D3D11Device *This,
                                     D3D11_DEPTH_STENCIL_VIEW_DESC *pDesc,
                                     ID3D11DepthStencilView **ppDepthStencilView )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11DepthstencilView *pDSV;
+    HRESULT hr;
+
+    hr = D3D11DepthStencilView_new(This, D3D11Resource(pResource), pDesc, pDSV);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppDepthStencilView = (ID3D11DepthStencilView *)pDSV;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -132,7 +351,16 @@ D3D11Device_CreateInputLayout( struct D3D11Device *This,
                                Int BytecodeLength,
                                ID3D11InputLayout **ppInputLayout )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11InputLayout *pLayout;
+    HRESULT hr;
+
+    hr = D3D11InputLayout_new(This, pInputElementDescs, NumElements,
+                              pShaderBytecodeWithInputSignature, BytecodeLength,
+                              &pLayout);
+    if (FAILED(hr))
+        return_error(hr);
+    *ppInputLayout = (ID3D11InputLayout *)pLayout;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -330,7 +558,7 @@ D3D11Device_CreateQuery( struct D3D11Device *This,
                          D3D11_QUERY_DESC *pQueryDesc,
                          ID3D11Query **ppQuery )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11Query_new(This, pQueryDesc, (struct D3D11Query **)ppQuery);
 }
 
 HRESULT WINAPI
@@ -338,7 +566,8 @@ D3D11Device_CreatePredicate( struct D3D11Device *This,
                              D3D11_QUERY_DESC *pPredicateDesc,
                              ID3D11Predicate **ppPredicate )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11Predicate_new(This, pPredicateDesc,
+                              (struct D3D11Predicate **)ppPredicate);
 }
 
 HRESULT WINAPI
@@ -346,7 +575,7 @@ D3D11Device_CreateCounter( struct D3D11Device *This,
                            D3D11_COUNTER_DESC *pCounterDesc,
                            ID3D11Counter **ppCounter )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11Counter_new(This, pCounterDesc, (struct D3D11Counter **)ppCounter);
 }
 
 HRESULT WINAPI
@@ -371,7 +600,58 @@ D3D11Device_CheckFormatSupport( struct D3D11Device *This,
                                 Int Format,
                                 UINT *pFormatSupport )
 {
-    STUB_return(E_NOTIMPL);
+    struct pipe_screen *screen = This->screen;
+    const enum pipe_format pf = dxgi_to_pipe_format(Format);
+    UINT mask = 0;
+
+    if (!pFormatSupport)
+        return_error(E_POINTER);
+
+    FSUP(BUFFER, 0, SAMPLER_VIEW, BUFFER);
+    FSUP(BUFFER, 0, VERTEX_BUFFER, IA_VERTEX_BUFFER);
+    FSUP(BUFFER, 0, INDEX_BUFFER, IA_INDEX_BUFFER);
+    FSUP(BUFFER, 0, STREAM_OUTPUT, SO_BUFFER);
+    FSUP(TEXTURE_1D, 0, SAMPLER_VIEW, TEXTURE1D);
+    FSUP(TEXTURE_2D, 0, SAMPLER_VIEW, TEXTURE2D);
+    FSUP(TEXTURE_3D, 0, SAMPLER_VIEW, TEXTURE3D);
+    FSUP(TEXTURE_CUBE, 0, SAMPLER_VIEW, TEXTURECUBE);
+
+    if (mask & D3D11_FORMAT_SUPPORT_TEXTURE2D) {
+       mask |=
+          D3D11_FORMAT_SUPPORT_SHADER_LOAD |
+          D3D11_FORMAT_SUPPORT_SHADER_SAMPLE |
+          D3D11_FORMAT_SUPPORT_MIP |
+          D3D11_FORMAT_SUPPORT_MIP_AUTOGEN |
+          D3D11_FORMAT_SUPPORT_SHADER_GATHER |
+       if (util_format_is_depth_or_stencil(pf)) {
+          mask |=
+             D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON |
+             D3D11_FORMAT_SUPPORT_SHADER_GATHER_COMPARISON;
+       }
+    }
+
+    if (1)
+       mask |=
+          D3D11_FORMAT_SUPPORT_CAST_WITHIN_BIT_LAYOUT |
+          D3D11_FORMAT_SUPPORT_BACK_BUFFER_CAST;
+
+    FSUP(TEXTURE_2D, 0, RENDER_TARGET, RENDER_TARGET);
+    FSUP(TEXTURE_2D, 0, RENDER_TARGET | PIPE_BIND_BLENDABLE, BLENDABLE);
+    FSUP(TEXTURE_2D, 0, DEPTH_STENCIL, DEPTH_STENCIL);
+    FSUP(TEXTURE_2D, 0, RENDER_TARGET | PIPE_BIND_DISPLAY_TARGET, DISPLAY);
+    FSUP(TEXTURE_2D, 0, SHADER_RESOURCE, TYPED_UNORDERED_ACCESS_VIEW);
+
+    FSUP(TEXTURE_2D, 2, RENDER_TARGET, MULTISAMPLE_RENDERTARGET);
+    if (mask & D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET)
+       if (GET_PCAP(TEXTURE_MULTISAMPLE))
+          mask |= D3D11_FORMAT_SUPPORT_MULTISAMPLE_LOAD;
+
+    mask |= D3D11_FORMAT_SUPPORT_CPU_LOCKABLE;
+    mask |= D3D11_FORMAT_SUPPORT_MULTISAMPLE_RESOLVE;
+
+    *pFormatSupport = mask;
+
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -380,29 +660,26 @@ D3D11Device_CheckMultisampleQualityLevels( struct D3D11Device *This,
                                            UINT SampleCount,
                                            UINT *pNumQualityLevels )
 {
-    STUB_return(E_NOTIMPL);
-}
+    enum pipe_format pf = dxgi_to_pipe_format(Format);
+    unsigned bind;
 
-void WINAPI
-D3D11Device_CheckCounterInfo( struct D3D11Device *This,
-                              Int *pCounterInfo )
-{
-    STUB();
-}
+    if (SampleCount > 32)
+        return_error(E_INVALIDARG);
 
-HRESULT WINAPI
-D3D11Device_CheckCounter( struct D3D11Device *This,
-                          D3D11_COUNTER_DESC *pDesc,
-                          D3D11_COUNTER_TYPE *pType,
-                          UINT *pActiveCounters,
-                          Int szName,
-                          UINT *pNameLength,
-                          Int szUnits,
-                          UINT *pUnitsLength,
-                          Int szDescription,
-                          UINT *pDescriptionLength )
-{
-    STUB_return(E_NOTIMPL);
+    if (!pNumQualityLevels)
+        return_error(E_POINTER);
+
+    bind = util_format_is_depth_or_stencil(pf) ?
+        PIPE_BIND_DEPTH_STENCIL :
+        PIPE_BIND_RENDER_TARGET;
+
+    if (This->screen->is_format_supported(This->screen, pf, PIPE_TEXTURE_2D,
+                                          SampleCount, bind))
+        *pNumQualityLevels = 1;
+    else
+        *pNumQualityLevels = 0;
+
+    return S_OK;
 }
 
 #define D3D11_FEATURE_CASE(n, m) case D3D11_FEATURE_##n: \
@@ -501,7 +778,7 @@ D3D11Device_GetPrivateData( struct D3D11Device *This,
                             UINT *pDataSize,
                             void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Get(&This->pdata, guid, pDataSize, pData);
 }
 
 HRESULT WINAPI
@@ -510,7 +787,7 @@ D3D11Device_SetPrivateData( struct D3D11Device *This,
                             UINT DataSize,
                             void *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_Set(&This->pdata, guid, pDataSize, pData);
 }
 
 HRESULT WINAPI
@@ -518,44 +795,52 @@ D3D11Device_SetPrivateDataInterface( struct D3D11Device *This,
                                      REFGUID guid,
                                      IUnknown *pData )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11PrivateData_SetInterface(This, guid, pData);
 }
 
-D3D11Device_(  )
+D3D_FEATURE_LEVEL
+D3D11Device_GetFeatureLevel( struct D3D11Device *This )
 {
-    STUB();
+    return This->feature_level;
 }
 
 UINT WINAPI
 D3D11Device_GetCreationFlags( struct D3D11Device *This )
 {
-    STUB_return(0);
+    return This->creation_flags;
 }
 
 HRESULT WINAPI
 D3D11Device_GetDeviceRemovedReason( struct D3D11Device *This )
 {
-    STUB_return(E_NOTIMPL);
+    return This->fatal_reason;
 }
 
 void WINAPI
 D3D11Device_GetImmediateContext( struct D3D11Device *This,
                                  ID3D11DeviceContext **ppImmediateContext )
 {
-    STUB();
+    assert(ppImmediateContext);
+    com_set(ppImmediateContext, This->immediate_context);
 }
 
 HRESULT WINAPI
 D3D11Device_SetExceptionMode( struct D3D11Device *This,
                               UINT RaiseFlags )
 {
-    STUB_return(E_NOTIMPL);
+    if (RaiseFlags & ~(D3D11_RAISE_FLAG_DRIVER_INTERNAL_ERROR |
+                       0))
+        return_error(E_INVALIDARG);
+
+    This->exceptions = RaiseFlags;
+
+    return S_OK;
 }
 
 UINT WINAPI
 D3D11Device_GetExceptionMode( struct D3D11Device *This )
 {
-    STUB_return(0);
+    return This->exceptions;
 }
 
 ID3D11DeviceVtbl D3D11Device_vtable = {

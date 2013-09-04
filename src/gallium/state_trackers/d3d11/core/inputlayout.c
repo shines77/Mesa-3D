@@ -24,11 +24,19 @@
 
 HRESULT
 D3D11InputLayout_ctor( struct D3D11InputLayout *This,
-struct D3D11UnknownParams *pParams)
+                       struct D3D11UnknownParams *pParams,
+                       D3D11_INPUT_ELEMENT_DESC *pElement,
+                       UINT NumElements,
+                       void *pBytecode,
+                       Int BytecodeLength )
 {
-    HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
+    HRESULT hr;
+
+    hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+
+    
 
     return S_OK;
 }
@@ -58,8 +66,14 @@ static const GUID *D3D11InputLayout_IIDs[] = {
 
 HRESULT
 D3D11InputLayout_new( struct D3D11Device *pDevice,
-struct D3D11InputLayout **ppOut )
+                      D3D11_INPUT_ELEMENT_DESC *pInputElementDescs,
+                      UINT NumElements,
+                      void *pShaderBytecodeWithInputSignature,
+                      Int BytecodeLength,
+                      struct D3D11InputLayout **ppOut )
 {
-    D3D11_NEW(D3D11InputLayout, ppOut, pDevice);
+    D3D11_NEW(D3D11InputLayout, ppOut, pDevice,
+              pInputElementDescs, NumElements,
+              pShaderByteCodeWithInputSignature, BytecodeLength);
 }
 

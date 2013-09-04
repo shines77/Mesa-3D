@@ -2,7 +2,8 @@
 #ifndef _D3D11_DEVICE_H_
 #define _D3D11_DEVICE_H_
 
-#include "unknown.h"
+#include "iunknown.h"
+#include "privatedata.h"
 
 #include "util/u_hash_table.h"
 
@@ -11,6 +12,10 @@
 struct D3D11Device
 {
     struct D3D11Unknown base;
+    struct D3D11DeviceContext *immediate_context;
+    struct pipe_screen *screen;
+    struct pipe_context *pipe;
+    struct pipe_context *pipe2;
 
     struct util_hash_tabke *ht_bs;
     struct util_hash_table *ht_ds;
@@ -24,6 +29,14 @@ struct D3D11Device
     struct D3D11DepthStencilState *ds_default;
     struct D3D11RasterizerState   *rs_default;
     struct D3D11SamplerState      *ss_default;
+
+    UINT creation_flags;
+    UINT exceptions;
+    HRESULT fatal_reason:
+
+    struct D3D11PrivateData pdata;
+
+    D3D_FEATURE_LEVEL feature_level;
 };
 static INLINE struct D3D11Device *D3D11Device(void *ptr)
 {

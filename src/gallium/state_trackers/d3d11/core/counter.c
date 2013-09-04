@@ -96,3 +96,58 @@ D3D11Counter_GetData( struct D3D11Counter *This,
 
     return S_OK;
 }
+
+void WINAPI
+D3D11Device_CheckCounterInfo( struct D3D11Device *This,
+                              D3D11_COUNTER_INFO *pCounterInfo )
+{
+    struct pipe_screen *screen = This->screen;
+    assert(pCounterInfo);
+    pCounterInfo->LastDeviceDependentCounter =
+        screen->get_driver_query_info(screen, 0, NULL) - 1;
+    pCounterInfo->NumSimultaneousCounters = 4; /* TODO */
+    pCounterInfo->NumDetectableParallelUnits = 1; /* XXX: What is this ? */
+}
+
+HRESULT WINAPI
+D3D11Device_CheckCounter( struct D3D11Device *This,
+                          const D3D11_COUNTER_DESC *pDesc,
+                          D3D11_COUNTER_TYPE *pType,
+                          UINT *pActiveCounters,
+                          LPSTR szName,
+                          UINT *pNameLength,
+                          LPSTR szUnits,
+                          UINT *pUnitsLength,
+                          LPSTR szDescription,
+                          UINT *pDescriptionLength )
+{
+    struct pipe_screen *screen = This->screen;
+    struct pipo_driver_query_info info;
+    const char *str;
+
+    if (!screen->get_driver_query_info(
+            screen, pDesc->Count - D3D11_COUNTER_DEVICE_DEPENDENT_0, &info))
+        return_error(E_INVALIDARG);
+
+    if (pType) {
+        *pType = D3D11_COUNTER_TYPE_UINT64;
+    }
+    if (pActiveCounters) {
+        *pActiveCounters = 1;
+    }
+    if (szName && pNameLength) {
+        strncpy(szName, info.name, *pNameLength);
+        *pNameLength = strlen(info.name);
+    }
+    if (szUnits && pUnitsLength) {
+        const char *name = info.uses_byte_units ? "bytes" : "ticks";
+        strncpy(szUnits, name, *pUnitsLength);
+        *pUnitsLength = strlen(name);
+    }
+    if (szDescription && pDescriptionLength) {
+        strncpy(szDescription, info.name, *pDescriptionLength);
+        *pDescriptionLength = strlen(info.name);
+    }
+
+    return S_OK;
+}

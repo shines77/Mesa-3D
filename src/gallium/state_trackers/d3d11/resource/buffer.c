@@ -110,8 +110,9 @@ static const GUID *D3D11Buffer_IIDs[] = {
 
 HRESULT
 D3D11Buffer_new( struct D3D11Device *pDevice,
-struct D3D11Buffer **ppOut )
+                 const D3D11_BUFFER_DESC *pDesc,
+                 struct D3D11Buffer **ppOut )
 {
-    D3D11_NEW(D3D11Buffer, ppOut, pDevice);
+    D3D11_NEW(D3D11Buffer, ppOut, pDevice, pDesc);
 }
 

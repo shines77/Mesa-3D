@@ -16,7 +16,10 @@ static INLINE struct D3D11ShaderResourceView *D3D11ShaderResourceView(void *ptr)
 }
 
 HRESULT
-D3D11ShaderResourceView_new( struct D3D11Device *, struct D3D11ShaderResourceView **ppOut );
+D3D11ShaderResourceView_new( struct D3D11Device *,
+                             struct D3D11Resource *,
+                             const D3D11_SHADER_RESOURCE_VIEW_DESC *pDesc,
+                             struct D3D11ShaderResourceView **ppOut );
 
 void WINAPI
 D3D11ShaderResourceView_GetDesc( struct D3D11ShaderResourceView *This,
