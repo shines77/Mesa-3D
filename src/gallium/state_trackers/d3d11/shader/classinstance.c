@@ -29,6 +29,7 @@ struct D3D11UnknownParams *pParams)
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+    list_inithead(&This->list);
 
     return S_OK;
 }
@@ -37,36 +38,55 @@ void
 D3D11ClassInstance_dtor( struct D3D11ClassInstance *This )
 {
     D3D11DeviceChild_dtor(&This->base);
+    LOCK(This->parent);
+    list_del(&This->list);
+    UNLOCK(This->parent);
 }
 
 void WINAPI
 D3D11ClassInstance_GetClassLinkage( struct D3D11ClassInstance *This,
                                     ID3D11ClassLinkage **ppLinkage )
 {
-    STUB();
+    assert(ppLinkage);
+    com_set(ppLinkage, This->parent);
 }
 
 void WINAPI
 D3D11ClassInstance_GetDesc( struct D3D11ClassInstance *This,
                             D3D11_CLASS_INSTANCE_DESC *pDesc )
 {
-    STUB();
+    assert(pDesc);
+    *pDesc = This->desc;
 }
 
 void WINAPI
 D3D11ClassInstance_GetInstanceName( struct D3D11ClassInstance *This,
-                                    Int pInstanceName,
-                                    Int *pBufferLength )
+                                    LPWSTR pInstanceName,
+                                    SIZE_T *pBufferLength )
 {
-    STUB();
+    if (!pBufferLength)
+        return;
+    if (pInstanceName) {
+        strncpy(pInstanceName, This->name, *pBufferLength);
+        *pBufferLength = strlen(pInstanceName);
+    } else {
+        *pBufferLength = strlen(This->name);
+    }
 }
 
 void WINAPI
 D3D11ClassInstance_GetTypeName( struct D3D11ClassInstance *This,
-                                Int pTypeName,
-                                Int *pBufferLength )
+                                LPWSTR pTypeName,
+                                SIZE_T *pBufferLength )
 {
-    STUB();
+    if (!pBufferLength)
+        return;
+    if (pTypeName) {
+        strncpy(pTypeName, This->type, *pBufferLength);
+        *pBufferLength = strlen(pTypeName);
+    } else {
+        *pBufferLength = strlen(This->type);
+    }
 }
 
 ID3D11ClassInstanceVtbl D3D11ClassInstance_vtable = {

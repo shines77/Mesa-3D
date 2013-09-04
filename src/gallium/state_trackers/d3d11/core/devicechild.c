@@ -44,7 +44,8 @@ void WINAPI
 D3D11DeviceChild_GetDevice( struct D3D11DeviceChild *This,
                             ID3D11Device **ppDevice )
 {
-    com_ref(ppDevice, This->device);
+    assert(ppDevice);
+    com_set(ppDevice, This->device);
 }
 
 HRESULT WINAPI
@@ -72,28 +73,3 @@ D3D11DeviceChild_SetPrivateDataInterface( struct D3D11DeviceChild *This,
 {
     return D3D11PrivateData_SetInterface(&This->pdata, guid, pData);
 }
-
-#if 0
-ID3D11DeviceChildVtbl D3D11DeviceChild_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)D3D11DeviceChild_GetDevice,
-    (void *)D3D11DeviceChild_GetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateData,
-    (void *)D3D11DeviceChild_SetPrivateDataInterface
-};
-
-static const GUID *D3D11DeviceChild_IIDs[] = {
-    &IID_ID3D11DeviceChild,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-D3D11DeviceChild_new( struct D3D11Device *pDevice,
-struct D3D11DeviceChild **ppOut )
-{
-    D3D11_NEW(D3D11DeviceChild, ppOut, pDevice);
-}
-#endif

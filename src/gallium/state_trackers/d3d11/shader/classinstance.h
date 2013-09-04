@@ -7,6 +7,11 @@
 struct D3D11ClassInstance
 {
     struct D3D11DeviceChild base;
+    struct list_head list;
+    struct D3D11ClassLinkage *parent;
+    const char *type;
+    const char *name;
+    D3D11_CLASS_INSTANCE_DESC desc;
 };
 static INLINE struct D3D11ClassInstance *D3D11ClassInstance(void *ptr)
 {

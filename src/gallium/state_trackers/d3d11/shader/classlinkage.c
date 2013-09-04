@@ -24,7 +24,7 @@
 
 HRESULT
 D3D11ClassLinkage_ctor( struct D3D11ClassLinkage *This,
-struct D3D11UnknownParams *pParams)
+                        struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))

@@ -7,6 +7,7 @@
 struct D3D11InputLayout
 {
     struct D3D11DeviceChild base;
+    void *cso;
 };
 static INLINE struct D3D11InputLayout *D3D11InputLayout(void *ptr)
 {
