@@ -132,7 +132,7 @@ union sm4_token_operand
 {
     uint32_t b32;
     struct {
-        uint32_t Comps      : 2;
+        uint32_t CompsEnum  : 2;
         uint32_t Mode       : 2;
         uint32_t Select     : 8;
         uint32_t File       : 8;
@@ -144,11 +144,14 @@ union sm4_token_operand
     };
 };
 
-struct sm4_token_operand_ext
+union sm4_token_operand_ext
 {
-    uint32_t Type     : 6;
-    uint32_t Negate   : 1;
-    uint32_t Absolute : 1;
+    uint32_t b32;
+    struct {
+        uint32_t Type     : 6;
+        uint32_t Negate   : 1;
+        uint32_t Absolute : 1;
+    };
 };
 
 union sm4_numeric
@@ -165,31 +168,67 @@ struct sm4_program;
 struct sm4_operand;
 struct sm4_declaration;
 struct sm4_instruction;
+struct sm4_operand;
+
+struct sm4_operand_index
+{
+    struct sm4_operand *Reg;
+    int64_t Disp;
+};
 
 struct sm4_operand
 {
-    uint8_t File;
-    uint8_t Select;
+    struct sm4_operand *next;
 
-    unsigned Mask     : 4;
-    unsigned Absolute : 1;
-    unsigned Negate   : 1;
+    unsigned File       : 8;
+    unsigned Mask       : 4;
+    unsigned NumComps   : 3;
+    unsigned Mode       : 3;
+    unsigned NumIndices : 2;
+    unsigned Absolute   : 1;
+    unsigned Negate     : 1;
 
-    union sm4_numeric Value[4];
+    uint8_t Swizzle[4];
+
+    union {
+        struct sm4_operand_index Index[3];
+        union sm4_numeric Value[4];
+    };
 };
 
 struct sm4_declaration
 {
+    uint32_t *Data;
+    struct sm4_token_return_type ReturnType;
+    union {
+        uint32_t SV;
+        uint32_t BaseIndex;
+        struct {
+            uint32_t ID;
+            uint32_t TableLengthFn;
+            uint16_t TableLength;
+            uint16_t ArrayLength;
+        } Iface;
+    };
+    uint32_t Num;
+    uint8_t NumComps;
 };
 
 struct sm4_instruction
 {
     struct sm4_token_instruction Insn;
     struct sm4_token_instruction_ext Ext;
-    struct sm4_operand Dst[2];
-    struct sm4_operand Src[4];
+    struct sm4_operand Opnd;
+    uint8_t NumOperands;
     struct sm4_declaration Dcl;
 };
+
+static void
+sm4_instruction_free(struct sm4_instruction *insn)
+{
+    if (insn->Dcl.Data)
+        FREE(insn->Dcl.Data);
+}
 
 struct sm4_program
 {
@@ -197,12 +236,9 @@ struct sm4_program
 
     struct sm4_token_version version;
 
-    struct sm4_declaration *decl;
     struct sm4_instruction *insn;
-    unsigned num_decl;
     unsigned num_insn;
     unsigned max_insn;
-    unsigned max_decl;
 
     uint32_t *icb_data;
     uint32_t icb_size;
@@ -284,8 +320,6 @@ sm4_program_create(struct sm4_shader_blob *blob)
 
     prog->max_insn = 8;
     prog->insn = MALLOC(prog->max_insn * sizeof(*prog->insn));
-    prog->max_decl = 4;
-    prog->insn = MALLOC(prog->max_decl * sizeof(*prog->decl));
 
     prog->info = blob;
 
@@ -299,7 +333,11 @@ sm4_program_create(struct sm4_shader_blob *blob)
 static void
 sm4_program_delete(struct sm4_program *prog)
 {
-    if (prog->decl) FREE(prog->decl);
+    unsigned i;
+
+    for (i = 0; i < prog->num_insn; ++i)
+        sm4_instruction_free(&prog->insn[i]);
+
     if (prog->insn) FREE(prog->decl);
 
     if (prog->sig.in) FREE(prog->sig.in);
@@ -324,13 +362,13 @@ static INLINE boolean TOK_END(struct sm4_parser *parse)
 {
     return parse->toks == parse->toks_end;
 }
-static INLINE uint32_t TOK_NEXT32(struct sm4_parser *parse)
+static INLINE uint32_t TOK_READ32(struct sm4_parser *parse)
 {
     uint32_t tok = LE32_TO_CPU(parse->toks[0]);
     parse->toks++;
     return tok;
 }
-static INLINE uint64_t TOK_NEXT64(struct sm4_parser *parse)
+static INLINE uint64_t TOK_READ64(struct sm4_parser *parse)
 {
     uint32_t tokl = TOK_READ32(parse);
     uint32_t tokh = TOK_READ32(parse);
@@ -354,9 +392,107 @@ static INLINE void TOK_MARK(struct sm4_parser *parse, unsigned n)
     parse->tok_next = parse->toks + n;
 }
 
-static void
-sm4_parse_operand(struct sm4_parser *parse)
+static HRESULT
+sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
 {
+    union sm4_token_operand tok = { .b32 = TOK_READ32(parse); }
+    unsigned i;
+
+    if (!opnd)
+        opnd = parse->insn.
+
+    assert(tok.File < SM4_FILE_COUNT);
+    opnd->File = tok.File;
+    opnd->Mask = 0xf;
+    opnd->NumIndices = tok.NumIndices;
+
+    switch (tok.CompsEnum) {
+    case SM4_OPERAND_COMPNUM_0:
+        assert(opnd->NumComps == 0);
+        break;
+    case SM4_OPERAND_COMPNUM_1:
+        opnd->NumComps = 1;
+        break;
+    case SM4_OPERAND_COMPNUM_4:
+        opnd->NumComps = 4;
+        opnd->Mode = tok.Mode;
+        switch (tok.Mode) {
+        case SM4_OPERAND_MODE_MASK:
+            opnd->Mask = tok.Select & 0xf;
+            break;
+        case SM4_OPERAND_MODE_SWIZZLE:
+            opnd->Swizzle[0] = (tok.Select >> 0) & 0x3;
+            opnd->Swizzle[1] = (tok.Select >> 2) & 0x3;
+            opnd->Swizzle[2] = (tok.Select >> 4) & 0x3;
+            opnd->Swizzle[3] = (tok.Select >> 6) & 0x3;
+            break;
+        case SM4_OPERAND_MODE_SCALAR:
+            for (i = 0; i < 4; ++i)
+                opnd->Swizzle[i] = tok.Select & 0x3;
+            break;
+        default:
+            assert(0);
+            break;
+        }
+        break;
+    case SM4_OPERAND_COMPNUM_N:
+        return_error(E_NOTIMPL);
+    default:
+        assert(0);
+        break;
+    }
+
+    if (tok.Extended) {
+        union sm4_token_operand_ext ext = { .b32 = TOK_READ32(parse) }
+        switch (ext.Type) {
+        case 0:
+            break;
+        case 1:
+            opnd->Absolute = ext.Absolute;
+            opnd->Negate = ext.Negate;
+            break;
+        default:
+            return_error(E_NOTIMPL);
+        }
+    }
+
+    for (i = 0; i < tok.NumIndices; ++i) {
+        unsigned r;
+        if (i == 0) r = tok.Index0Repr; else
+        if (i == 1) r = tok.Index1Repr; else
+        if (i == 2) r = tok.Index2repr; else return_error(E_NOTIMPL);
+        switch (r) {
+        case SM4_OPERAND_INDEX_REPR_IMM32:
+            opnd->Index[i].Disp = TOK_READ32(parse);
+            break;
+        case SM4_OPERAND_INDEX_REPR_IMM64:
+            opnd->Index[i].Disp = TOK_READ64(parse);
+            break;
+        case SM4_OPERAND_INDEX_REPR_REG:
+            opnd->Index[i].Disp = 0;
+            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            break;
+        case SM4_OPERAND_INDEX_REPR_REG_IMM32:
+            opnd->Index[i].Disp = TOK_READ32(parse);
+            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            break;
+        case SM4_OPERAND_INDEX_REPR_REG_IMM64:
+            opnd->Index[i].Disp = TOK_READ64(parse);
+            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            break;
+        }
+    }
+
+    if (opnd->File == SM4_FILE_IMMEDIATE32) {
+        assert(!tok.NumIndices);
+        for (i = 0; i < opnd.NumComps; ++i)
+            opnd.Value[i].u32 = TOK_READ32(parse);
+    } else
+    if (opnd->File == SM4_FILE_IMMEDIATE64) {
+        assert(!tok.NumIndices);
+        for (i = 0; i < opnd.NumComps; ++i)
+            opnd.Value[i].u64 = TOK_READ64(parse);
+    }
 }
 
 static void
@@ -369,9 +505,10 @@ sm4_parse_next(struct sm4_parser *parse)
 {
     struct sm4_token_instruction *insn = &parse->insn.Insn;
     struct sm4_token_instruction_ext ext;
+    uint32_t value;
     struct sm4_program *prog = parse->prog;
 
-    insn.b32 = TOK_NEXT32(parse);
+    insn.b32 = TOK_READ32(parse);
 
     TOK_MARK(parse, insn.Length - 1);
 
@@ -387,7 +524,7 @@ sm4_parse_next(struct sm4_parser *parse)
                 insn->DclGlobalFlags.EnableRawAndStructuredInNonCS;
         break;
     case SM4_OPCODE_DCL_HS_MAX_TESSFACTOR:
-        prog->prop.hs.max_tessfactor = asfloat(TOK_NEXT32(parse));
+        prog->prop.hs.max_tessfactor = asfloat(TOK_READ32(parse));
         break;
     case SM4_OPCODE_DCL_INPUT_CONTROL_POINT_COUNT:
         prog->prop.hs.output_size = insn->DclOutputControlPointCount.Count;
@@ -408,22 +545,22 @@ sm4_parse_next(struct sm4_parser *parse)
         prog->prop.gs.input_prim = insn->DclGSInputPrimitive.Primitive;
         break;
     case SM4_OPCODE_DCL_GS_INSTANCE_COUNT:
-        prog->prop.gs.instance_count = TOK_NEXT32(parse);
+        prog->prop.gs.instance_count = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_GS_OUTPUT_PRIMITIVE_TOPOLOGY:
         prog->prop.gs.output_topology = insn->DclGSOutputPrimitiveTopology.Topology;
         break;
     case SM4_OPCODE_DCL_MAX_OUTPUT_VERTEX_COUNT:
-        prog->prop.gs.max_vertices = TOK_NEXT32(parse);
+        prog->prop.gs.max_vertices = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_THREAD_GROUP:
-        prog->prop.cs.block_size[0] = TOK_NEXT32(parse);
-        prog->prop.cs.block_size[1] = TOK_NEXT32(parse);
-        prog->prop.cs.block_size[2] = TOK_NEXT32(parse);
+        prog->prop.cs.block_size[0] = TOK_READ32(parse);
+        prog->prop.cs.block_size[1] = TOK_READ32(parse);
+        prog->prop.cs.block_size[2] = TOK_READ32(parse);
         break;
 
     case SM4_OPCODE_CUSTOMDATA:
-        prog->icb_size = (TOK_NEXT32(parse) - 2) * 4;
+        prog->icb_size = (TOK_READ32(parse) - 2) * 4;
         prog->icb_data = MALLOC(prog->icb_size);
         if (!prog->icb_data)
             return E_OUTOFMEMORY;
@@ -431,9 +568,25 @@ sm4_parse_next(struct sm4_parser *parse)
         TOK_SKIP(prog->icb_size / 4);
         break;
 
+    /* Markers: */
+    case SM4_OPCODE_HS_FORK_PHASE:
+    case SM4_OPCODE_HS_JOIN_PHASE:
+        break;
+
     /* Registers and resources: */
     case SM4_OPCODE_DCL_TEMPS:
-        prog->regs.num_temps += TOK_NEXT32(parse);
+        prog->regs.num_temps += TOK_READ32(parse);
+        break;
+    case SM4_OPCODE_DCL_INDEXABLE_TEMP:
+        i = prog->regs.num_arrays++;
+        if (prog->regs.num_arrays == prog->regs.max_arrays) {
+            prog->regs.max_array += 8;
+            prog->regs.array = REALLOC(prog->regs.array,
+                (prog->regs.max_array - 8) * sizeof(prog->regs.array[0]),
+                (prog->regs.max_array + 0) * sizeof(prog->regs.array[0]));
+        }
+        prog->regs.array[i].Size = TOK_READ32(parse);
+        prog->regs.array[i].Comp = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_RESOURCE:
         break;
@@ -454,28 +607,49 @@ sm4_parse_next(struct sm4_parser *parse)
         break;
     case SM4_OPCODE_DCL_INDEX_RANGE:
         break;
-    case SM4_OPCODE_DCL_INDEXABLE_TEMP:
-        break;
 
     /* Crazy stuff: */
+    case SM4_OPCODE_DCL_FUNCTION_BODY:
+        insn->Dcl.Num = TOK_READ32(parse);
+        break;
+    case SM4_OPCODE_DCL_FUNCTION_TABLE:
+        insn->Dcl.Num = TOK_READ32(parse);
+        insn->Dcl.Data = (uint32_t *)MALLOC(insn->Dcl.Num * sizeof(uint32_t));
+        for (i = 0; i < insn->Dcl.Num; ++i)
+            insn->Dcl.Data[i] = TOK_READ32(parse);
+        break;
     case SM4_OPCODE_DCL_INTERFACE:
+        insn->Dcl.Iface.ID = TOK_READ32(parse);
+        insn->Dcl.Iface.TableLengthFn = TOK_READ32(parse);
+        value = TOK_READ32(parse);
+        insn->Dcl.Iface.ArrayLength = value >> 16;
+        insn->Dcl.Iface.TableLength = value & 0xffff;
+        value &= 0xffff;
+        insn->Dcl.Data = (uint32_t *)MALLOC(value * sizeof(uint32_t));
+        for (i = 0; i < insn->Dcl.Iface.TableLength; ++i)
+            insn->Dcl.Data[i] = TOK_READ32(parse);
+        break;
 
     default:
         ext.b32 = insn->b32;
-        while (ext.Extended:
-            ext.b32 = TOK_NEXT32(parse);
-            if (ext.Type == SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_SAMPLE_CONTROLS:
-            } else
-            if (ext.Type == SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_RESOURCE_DIM:
-            } else
-            if (ext.Type == SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_RESOURCE_RETURN_TYPE:
+        while (ext.Extended) {
+            ext.b32 = TOK_READ32(parse);
+            switch (ext.Type) {
+            case SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_SAMPLE_CONTROLS:
+                break;
+            case SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_RESOURCE_DIM:
+                break;
+            case SM4_TOKEN_INSTRUCTION_EXTENDED_TYPE_RESOURCE_RETURN_TYPE:
+                break;
+            default:
+                break;
             }
         }
 
-        if (insn->Opcode == SM4_OPCODE_INTERFACE_CALL:
+        if (insn->Opcode == SM4_OPCODE_INTERFACE_CALL) {
         }
 
-        while (:
+        while () {
             sm4_parse_operand(parse);
         }
     }
@@ -494,7 +668,7 @@ sm4_parse(d3d11_shader_blob *info)
         return NULL;
     parse.tok = info->bytecode.toks;
 
-    parse.prog->version.b32 = TOK_NEXT32(&parse);
+    parse.prog->version.b32 = TOK_READ32(&parse);
     if (parse.prog->version.Major < 4 || parse.prog->version.Major > 5) {
         ERROR("invalid shader version: %u.%u\n",
               parse.prog->version.Major,
@@ -502,7 +676,7 @@ sm4_parse(d3d11_shader_blob *info)
         goto fail;
     }
 
-    parse.toks_length = TOK_NEXT32(&parse);
+    parse.toks_length = TOK_READ32(&parse);
     parse.toks_end = parse.tok - 2 + parse.toks_length;
 
     info->version.major = parse.prog->version.Major;
