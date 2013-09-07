@@ -24,11 +24,38 @@
 
 HRESULT
 DXGISurface_ctor( struct DXGISurface *This,
-struct D3D11UnknownParams *pParams)
+                  struct D3D11UnknownParams *pParams,
+                  struct D3D11Texture2D *pTex,
+                  const DXGI_SURFACE_DESC *pDesc )
 {
-    HRESULT hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
+    D3D11_TEXTURE2D_DESC desc;
+    HRESULT hr;
+
+    hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+    This->desc = *pDesc;
+
+    if (!pTex) {
+        desc.Width = pDesc->Width;
+        desc.Height = pDesc->Height;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = pDesc->Format;
+        desc.SampleDesc = pDesc->SampleDesc;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags =
+            D3D11_RESOURCE_MISC_SHARED |
+            D3D11_RESOURCE_MISC_GDI_COMPATIBLE;
+
+        hr = D3D11Texture2D_new(&desc, &This->tex);
+        if (FAILED(hr))
+            return hr;
+    } else {
+        This->tex = pTex;
+    }
 
     return S_OK;
 }
@@ -37,13 +64,16 @@ void
 DXGISurface_dtor( struct DXGISurface *This )
 {
     DXGIDeviceSubObject_dtor(&This->base);
+    D3D11Texture2D_dtor(This->tex);
 }
 
 HRESULT WINAPI
 DXGISurface_GetDesc( struct DXGISurface *This,
                      DXGI_SURFACE_DESC *pDesc )
 {
-    STUB_return(E_NOTIMPL);
+    user_assert(pDesc, E_POINTER);
+    *pDesc = This->desc;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -51,19 +81,57 @@ DXGISurface_Map( struct DXGISurface *This,
                  DXGI_MAPPED_RECT *pLockedRect,
                  UINT MapFlags )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Device *dev = This->tex->base.base.device;
+    HRESULT hr;
+
+    hr = D3D11DeviceContext_Map(dev->immediate, MapFlags);
+    if (SUCCEEDED(hr)) {
+        pLockedRect->x = ;
+    }
+    return hr;
 }
 
 HRESULT WINAPI
 DXGISurface_Unmap( struct DXGISurface *This )
 {
-    STUB_return(E_NOTIMPL);
+    struct D3D11Device *dev = This->tex->base.base.device;
+    return D3D11DeviceContext_Unmap(dev->immediate, This->tex);
+}
+
+
+/* COM crazyness: */
+
+HRESULT WINAPI
+DXGISurface_QueryInterface( struct DXGISurface *This,
+                            REFIID riid,
+                            void **ppvObject )
+{
+    HRESULT hr = D3D11Unknown_QueryInterface((void *)This, riid, ppvObject);
+    if (FAILED(hr))
+        hr = D3D11Unknown_QueryInterface((void *)This->tex, riid, ppvObject);
+    return hr;
+}
+ULONG WINAPI
+DXGISurface_AddRef( struct DXGISurface *This )
+{
+    ULONG r = D3D11Unknown_AddRef((void *)This);
+    ULONG s = D3D11Unknown_AddRef((void *)This->tex);
+    assert(r == s);
+    return r;
+}
+ULONG WINAPI
+DXGISurface_Release( struct DXGISurface *This )
+{
+    ULONG r = D3D11Unknown_Release((void *)This);
+    ULONG s = D3D11Unknown_Release((void *)This->tex);
+    assert(r == s);
+    return r;
 }
 
 IDXGISurfaceVtbl DXGISurface_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
+    (void *)DXGISurface_QueryInterface,
+    (void *)DXGISurface_AddRef,
+    (void *)DXGISurface_Release,
     (void *)DXGIObject_SetPrivateData,
     (void *)DXGIObject_SetPrivateDataInterface,
     (void *)DXGIObject_GetPrivateData,

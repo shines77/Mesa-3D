@@ -82,6 +82,8 @@ void
 D3D11Texture2D_dtor( struct D3D11Texture2D *This )
 {
     D3D11Resource_dtor(&This->base);
+    if (This->surf)
+        DXGISurface_dtor(This->surf);
 }
 
 static void WINAPI
@@ -100,10 +102,44 @@ D3D11Texture2D_GetDesc( struct D3D11Texture2D *This,
     *pDesc = This->desc;
 }
 
+
+/* This is a bit crazy ... */
+
+HRESULT WINAPI
+D3D11Texture2D_QueryInterface( struct D3D11Texture2D *This,
+                               REFIID riid,
+                               void **ppvObject )
+{
+    HRESULT hr = D3D11Unknown_QueryInterface((void *)This, riid, ppvObject);
+    if (FAILED(hr) && This->surf)
+        hr = D3D11Unknown_QueryInterface((void *)This->surf, riid, ppvObject);
+    return hr;
+}
+ULONG WINAPI
+D3D11Texture2D_AddRef( struct D3D11Texture2D *This )
+{
+    ULONG r = D3D11Unknown_AddRef((void *)This);
+    if (This->surf) {
+        ULONG s = D3D11Unknown_AddRef((void *)This->surf);
+        assert(r == s);
+    }
+    return r;
+}
+ULONG WINAPI
+D3D11Texture2D_Release( struct D3D11Texture2D *This )
+{
+    ULONG r = D3D11Unknown_Release((void *)This);
+    if (r && This->surf) {
+        ULONG s = D3D11Unknown_Release((void *)This->surf);
+        assert(r == s);
+    }
+    return r;
+}
+
 ID3D11Texture2DVtbl D3D11Texture2D_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
+    (void *)D3D11Texture2D_QueryInterface,
+    (void *)D3D11Texture2D_AddRef,
+    (void *)D3D11Texture2D_Release,
     (void *)D3D11DeviceChild_GetDevice,
     (void *)D3D11DeviceChild_GetPrivateData,
     (void *)D3D11DeviceChild_SetPrivateData,
