@@ -24,11 +24,55 @@
 
 HRESULT
 DXGIAdapter_ctor( struct DXGIAdapter *This,
-struct D3D11UnknownParams *pParams)
+                  struct D3D11UnknownParams *pParams,
+                  struct DXGIFactory *factory,
+                  const struct native_platform *platform,
+                  void *dpy )
 {
-    HRESULT hr = DXGIObject_ctor(&This->base, pParams);
+    struct native_display *display;
+    HRESULT hr;
+    int i, n;
+    char name[128];
+
+    hr = DXGIObject_ctor(&This->base, pParams, &factory->base.base);
     if (FAILED(hr))
         return hr;
+
+    This->display = platform->create_display(dpy, FALSE);
+    if (!This->display)
+        This->display = platform->create_display(dpy, TRUE);
+    if (!This->display)
+        return Error(E_FAIL, "Failed to create_display.\n");
+    This->display->user_data = This;
+
+    display = This->display;
+
+    if (!This->display->init_screen(This->display))
+        return Error(E_FAIL, "Failed to init_screen.\n");
+
+    n = snprintf(name, sizeof(name), "D3D11/st on %s %s",
+                 This->display->screen->get_vendor(This->display->screen),
+                 This->display->screen->get_name(This->display->screen));
+
+    if (n > Elements(This->desc.Description))
+        n = Elements(This->desc.Description);
+    for (i = 0; i < n; ++i)
+        This->desc.Description[i] = (WCHAR)name[i];
+
+    desc.DedicatedVideoMemory = This->display->screen->get_param(
+        This->display->screen, PIPE_CAP_DEVICE_MEMORY_SIZE) << 20;
+    desc.DedicatedSystemMemory = 0;
+    desc.SharedSystemMemory = 1ULL << 32;
+
+    *(void **)&desc.AdapterLuid = dpy; /* XXX */
+
+    This->configs = display->get_configs(display, &This->num_configs);
+
+    for (i = 0; i < This->num_configs; ++i) {
+    }
+
+    if (display->modeset) {
+    }
 
     return S_OK;
 }
@@ -36,6 +80,11 @@ struct D3D11UnknownParams *pParams)
 void
 DXGIAdapter_dtor( struct DXGIAdapter *This )
 {
+    if (This->display) {
+        This->display->destroy(This->display);
+        FREE(This->configs);
+        FREE(This->connectors);
+    }
     DXGIObject_dtor(&This->base);
 }
 
@@ -44,6 +93,8 @@ DXGIAdapter_EnumOutputs( struct DXGIAdapter *This,
                          UINT Output,
                          IDXGIOutput **ppOutput )
 {
+    if (Output >= This->num_outputs)
+        return Error(DXGI_ERROR_NOT_FOUND, "Output ID out of range.\n");
     STUB_return(E_NOTIMPL);
 }
 
@@ -51,7 +102,9 @@ HRESULT WINAPI
 DXGIAdapter_GetDesc( struct DXGIAdapter *This,
                      DXGI_ADAPTER_DESC *pDesc )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pDesc);
+    *pDesc = This->desc;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -59,7 +112,17 @@ DXGIAdapter_CheckInterfaceSupport( struct DXGIAdapter *This,
                                    REFGUID InterfaceName,
                                    LARGE_INTEGER *pUMDVersion )
 {
-    STUB_return(E_NOTIMPL);
+    if (InterfaceName == IID_ID3D11Device) {
+        /* This value stems from Win7 with Catalyst 10.8, meaning unclear. */
+        pUMDVersion->QuadPart = 0x00080011000a0411ULL;
+    } else
+    if (InterfaceName == IID_ID3D10Device1 ||
+        InterfaceName == IID_ID3D11Device) {
+        return Error(DXGI_ERROR_UNSUPPORTED, "No one uses D3D10 !\n");
+    } else {
+        return Error(DXGI_ERROR_UNSUPPORTED, "Unknown interface.\n");
+    }
+    return S_OK;
 }
 
 IDXGIAdapterVtbl DXGIAdapter_vtable = {

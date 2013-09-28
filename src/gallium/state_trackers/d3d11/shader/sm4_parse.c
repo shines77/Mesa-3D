@@ -178,8 +178,6 @@ struct sm4_operand_index
 
 struct sm4_operand
 {
-    struct sm4_operand *next;
-
     unsigned File       : 8;
     unsigned Mask       : 4;
     unsigned NumComps   : 3;
@@ -218,16 +216,33 @@ struct sm4_instruction
 {
     struct sm4_token_instruction Insn;
     struct sm4_token_instruction_ext Ext;
-    struct sm4_operand Opnd;
-    uint8_t NumOperands;
+    struct sm4_operand Opnd[7];
     struct sm4_declaration Dcl;
 };
 
 static void
+sm4_operand_free(struct sm4_operand *opnd, boolean free)
+{
+    unsigned r;
+
+    for (r = 0; r < opnd->NumIndices; ++r)
+        if (opnd->Index[r].Reg)
+            sm4_operand_free(opnd->Index[r].Reg, TRUE);
+
+    if (free)
+        FREE(opnd);
+}
+
+static void
 sm4_instruction_free(struct sm4_instruction *insn)
 {
+    unsigned i;
+
     if (insn->Dcl.Data)
         FREE(insn->Dcl.Data);
+
+    for (i = 0; i < insn->NumOperands; ++i)
+        sm4_operand_free(&insn->Opnd[i], FALSE);
 }
 
 struct sm4_program
@@ -291,6 +306,12 @@ struct sm4_program
     } regs;
 
     struct {
+        uint8_t target;
+        uint8_t nr_samples;
+        struct sm4_token_return_type return_type;
+    } resource[256];
+
+    struct {
         boolean allow_refactoring;
         boolean fp64;
         boolean raw_structured_en;
@@ -347,15 +368,18 @@ sm4_program_delete(struct sm4_program *prog)
     FREE(prog);
 }
 
-static void
+static HRESULT
 sm4_program_add_insn(struct sm4_program *prog, struct sm4_instruction *insn)
 {
     if (prog->num_insn == prog->max_insn) {
         prog->insn = REALLOC(prog->insn,
                              prog->max_insn * 1 * sizeof(*prog->insn);
                              prog->max_insn * 2 * sizeof(*prog->insn));
+        if (!prog->insn)
+            return Error(E_OUTOFMEMORY, "");
     }
     prog->insn[prog->num_insn++] = *insn;
+    return S_OK;
 }
 
 static INLINE boolean TOK_END(struct sm4_parser *parse)
@@ -378,7 +402,7 @@ static INLINE void TOK_SKIP(struct sm4_parser *parse, unsigned n)
 {
     parse->toks += n;
 }
-static INLINE void TOK_JUMP(struct sm4_parser *parse)
+static INLINE void TOK_JMP(struct sm4_parser *parse)
 {
     assert(parse->tok_next);
     if (parse->toks != parse->tok_next) {
@@ -387,19 +411,23 @@ static INLINE void TOK_JUMP(struct sm4_parser *parse)
     }
     parse->tok_next = NULL;
 }
-static INLINE void TOK_MARK(struct sm4_parser *parse, unsigned n)
+static INLINE boolean TOK_NEXTI(struct sm4_parsrer *parse)
+{
+    return parse->toks == parse->toks_next;
+}
+static INLINE void TOK_SETJMP(struct sm4_parser *parse, unsigned n)
 {
     parse->tok_next = parse->toks + n;
 }
 
-static HRESULT
-sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
+static struct sm4_operand *
+sm4_parse_operand(struct sm4_parser *parse, struct sm4_operand *opnd)
 {
     union sm4_token_operand tok = { .b32 = TOK_READ32(parse); }
     unsigned i;
 
     if (!opnd)
-        opnd = parse->insn.
+        opnd = CALLOC_STRUCT(sm4_operand);
 
     assert(tok.File < SM4_FILE_COUNT);
     opnd->File = tok.File;
@@ -436,7 +464,7 @@ sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
         }
         break;
     case SM4_OPERAND_COMPNUM_N:
-        return_error(E_NOTIMPL);
+        return Error(E_NOTIMPL, "");
     default:
         assert(0);
         break;
@@ -452,7 +480,7 @@ sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
             opnd->Negate = ext.Negate;
             break;
         default:
-            return_error(E_NOTIMPL);
+            return Error(E_NOTIMPL, "");
         }
     }
 
@@ -460,7 +488,7 @@ sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
         unsigned r;
         if (i == 0) r = tok.Index0Repr; else
         if (i == 1) r = tok.Index1Repr; else
-        if (i == 2) r = tok.Index2repr; else return_error(E_NOTIMPL);
+        if (i == 2) r = tok.Index2repr; else return Error(E_NOTIMPL, "");
         switch (r) {
         case SM4_OPERAND_INDEX_REPR_IMM32:
             opnd->Index[i].Disp = TOK_READ32(parse);
@@ -470,15 +498,15 @@ sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
             break;
         case SM4_OPERAND_INDEX_REPR_REG:
             opnd->Index[i].Disp = 0;
-            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            opnd->Index[i].Reg = sm4_parse_operand(parse, NULL);
             break;
         case SM4_OPERAND_INDEX_REPR_REG_IMM32:
             opnd->Index[i].Disp = TOK_READ32(parse);
-            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            opnd->Index[i].Reg = sm4_parse_operand(parse, NULL);
             break;
         case SM4_OPERAND_INDEX_REPR_REG_IMM64:
             opnd->Index[i].Disp = TOK_READ64(parse);
-            opnd->Index[i].Reg = sm4_parse_operand(parse);
+            opnd->Index[i].Reg = sm4_parse_operand(parse, NULL);
             break;
         }
     }
@@ -493,24 +521,22 @@ sm4_parse_operand(struct sm4_operand *opnd, struct sm4_parser *parse)
         for (i = 0; i < opnd.NumComps; ++i)
             opnd.Value[i].u64 = TOK_READ64(parse);
     }
-}
 
-static void
-sm4_parse_instruction(struct sm4_parser *parse)
-{
+    return opnd;
 }
 
 static HRESULT
-sm4_parse_next(struct sm4_parser *parse)
+sm4_parse_instruction(struct sm4_parser *parse)
 {
     struct sm4_token_instruction *insn = &parse->insn.Insn;
+    boolean keep = FALSE;
     struct sm4_token_instruction_ext ext;
     uint32_t value;
     struct sm4_program *prog = parse->prog;
 
     insn.b32 = TOK_READ32(parse);
 
-    TOK_MARK(parse, insn.Length - 1);
+    TOK_SETJMP(parse, insn.Length - 1);
 
     switch (insn.Opcode) {
     /* Properties and options: */
@@ -571,6 +597,7 @@ sm4_parse_next(struct sm4_parser *parse)
     /* Markers: */
     case SM4_OPCODE_HS_FORK_PHASE:
     case SM4_OPCODE_HS_JOIN_PHASE:
+        keep = TRUE;
         break;
 
     /* Registers and resources: */
@@ -579,8 +606,8 @@ sm4_parse_next(struct sm4_parser *parse)
         break;
     case SM4_OPCODE_DCL_INDEXABLE_TEMP:
         i = prog->regs.num_arrays++;
-        if (prog->regs.num_arrays == prog->regs.max_arrays) {
-            prog->regs.max_array += 8;
+        if (prog->regs.num_arrays >= prog->regs.max_arrays) {
+            prog->regs.max_arrays += 8;
             prog->regs.array = REALLOC(prog->regs.array,
                 (prog->regs.max_array - 8) * sizeof(prog->regs.array[0]),
                 (prog->regs.max_array + 0) * sizeof(prog->regs.array[0]));
@@ -589,23 +616,67 @@ sm4_parse_next(struct sm4_parser *parse)
         prog->regs.array[i].Comp = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_RESOURCE:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        i = insn->Opnd[0].Index[0].Disp;
+        assert(i < Elements(prog->resource));
+        prog->resource[i].return_type = TOK_READ32(parse);
+        prog->resource[i].target = insn->DclResource.Target;
+        prog->resource[i].nr_samples = insn->DclResource.NrSamples;
         break;
     case SM4_OPCODE_DCL_SAMPLER:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        i = insn->Opnd[0].Index[0].Disp;
+        assert(i < 16);
+        prog->regs.samplers_used |= 1 << i;
+        if (insn->DclSampler.Shadow)
+            prog->regs.samplers_shadow |= 1 << i;
+        if (insn->DclSampler.Mono)
+            prog->regs.samplers_mono |= 1 << i;
         break;
     case SM4_OPCODE_DCL_INPUT:
     case SM4_OPCODE_DCL_INPUT_PS:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        if (IS_PS)
+            prog->regs.input[i].interp = insn->DclInputPS.Interpolation;
         break;
     case SM4_OPCODE_DCL_INPUT_SIV:
     case SM4_OPCODE_DCL_INPUT_SGV:
     case SM4_OPCODE_DCL_INPUT_PS_SIV:
     case SM4_OPCODE_DCL_INPUT_PS_SGV:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        if (IS_PS)
+            prog->regs.input[i].interp = insn->DclInputPS.Interpolation;
+        prog->regs.input[i].sv = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_OUTPUT:
+        sm4_parse_operand(&insn->Opnd[0], parse);
         break;
     case SM4_OPCODE_DCL_OUTPUT_SIV:
     case SM4_OPCODE_DCL_OUTPUT_SGV:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        prog->regs.output[i].sv = TOK_READ32(parse);
         break;
     case SM4_OPCODE_DCL_INDEX_RANGE:
+        sm4_parse_operand(&insn->Opnd[0], parse);
+        insn->Dcl.Num = TOK_READ32(parse);
+        break;
+
+    /* Slightly crazy stuff: */
+    case SM4_OPCODE_DCL_UNORDERED_ACCESS_VIEW_TYPED:
+        break;
+    case SM4_OPCODE_DCL_UNORDERED_ACCESS_VIEW_RAW:
+        break;
+    case SM4_OPCODE_DCL_UNORDERED_ACCESS_VIEW_STRUCTURED:
+        break;
+    case SM4_OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_RAW:
+        break;
+    case SM4_OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_STRUCTURED:
+        break;
+    case SM4_OPCODE_DCL_RESOURCE_RAW:
+        break;
+    case SM4_OPCODE_DCL_RESOURCE_STRUCTURED:
+        break;
+    case SM4_OPCODE_DCL_STREAM:
         break;
 
     /* Crazy stuff: */
@@ -647,15 +718,19 @@ sm4_parse_next(struct sm4_parser *parse)
         }
 
         if (insn->Opcode == SM4_OPCODE_INTERFACE_CALL) {
+            insn->Dcl.Num = TOK_READ32(parse);
         }
 
-        while () {
-            sm4_parse_operand(parse);
+        while (!TOK_NEXTI(parse)) {
+            if (insn->NumOperands >= Elements(insn->Opnd))
+                return Error(D3DERR_DRIVERINTERNALERROR, "static allocation");
+            sm4_parse_operand(&insn->Opnd[insn->NumOperands++], parse);
         }
+        keep = TRUE;
     }
-    TOK_JUMP(parse);
+    TOK_JMP(parse);
 
-    return S_OK;
+    return keep ? sm4_program_add_insn(prog, insn) : S_OK;
 }
 
 struct sm4_program *

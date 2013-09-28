@@ -7,6 +7,10 @@
 struct DXGIAdapter
 {
     struct DXGIObject base;
+    struct native_display *diplay;
+    DXGI_ADAPTER_DESC1 desc;
+    const struct native_connector **connectors;
+    char name[128];
 };
 static INLINE struct DXGIAdapter *DXGIAdapter(void *ptr)
 {

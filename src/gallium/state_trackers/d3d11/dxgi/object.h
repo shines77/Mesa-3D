@@ -17,7 +17,12 @@ static INLINE struct DXGIObject *DXGIObject(void *ptr)
 }
 
 HRESULT
-DXGIObject_new( struct D3D11Device *, struct DXGIObject **ppOut );
+DXGIObject_ctor( struct DXGIObject *This,
+                 struct D3D11UnknownParams *pParams,
+                 struct D3D11Unknown *pParent )
+
+void
+DXGIObject_dtor( struct DXGIObject *This );
 
 HRESULT WINAPI
 DXGIObject_SetPrivateData( struct DXGIObject *This,

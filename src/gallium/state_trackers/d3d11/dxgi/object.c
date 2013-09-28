@@ -24,8 +24,10 @@
 
 HRESULT
 DXGIObject_ctor( struct DXGIObject *This,
-                 struct D3D11UnknownParams *pParams )
+                 struct D3D11UnknownParams *pParams,
+                 struct D3D11Unknown *parent )
 {
+    com_set(&This->parent, parent);
     return D3D11Unknown_ctor(&This->base, pParams);
 }
 
@@ -33,6 +35,7 @@ void
 DXGIObject_dtor( struct DXGIObject *This )
 {
     D3D11PrivateData_Destroy(&This->pdata);
+    com_ref(&This->parent, NULL);
     D3D11Unknown_dtor(&This->base);
 }
 
@@ -69,26 +72,3 @@ DXGIObject_GetParent( struct DXGIObject *This,
 {
     return D3DUnknown_QueryInterface(This->parent, riid, ppParent);
 }
-
-IDXGIObjectVtbl DXGIObject_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)DXGIObject_SetPrivateData,
-    (void *)DXGIObject_SetPrivateDataInterface,
-    (void *)DXGIObject_GetPrivateData,
-    (void *)DXGIObject_GetParent
-};
-
-static const GUID *DXGIObject_IIDs[] = {
-    &IID_IDXGIObject,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-DXGIObject_new( struct DXGIObject **ppOut )
-{
-    D3D11_NEW(DXGIObject, ppOut, pDevice);
-}
-

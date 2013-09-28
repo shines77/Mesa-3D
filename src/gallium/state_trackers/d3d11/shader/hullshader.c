@@ -24,9 +24,9 @@
 
 HRESULT
 D3D11HullShader_ctor( struct D3D11HullShader *This,
-struct D3D11UnknownParams *pParams)
+                      struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
+    HRESULT hr = D3D11Shader_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
 
@@ -36,6 +36,7 @@ struct D3D11UnknownParams *pParams)
 void
 D3D11HullShader_dtor( struct D3D11HullShader *This )
 {
+    D3D11Shader_dtor(&This->base);
 #ifdef PIPE_SHADER_HULL
     if (This->cso) {
         DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_hs_state, This->cso);

@@ -20,13 +20,13 @@
  * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
  * USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
-#include "keyedmutex.h"
+#include "vertexshader.h"
 
 HRESULT
-DXGIKeyedMutex_ctor( struct DXGIKeyedMutex *This,
-                     struct D3D11UnknownParams *pParams )
+D3D11VertexShader_ctor( struct D3D11VertexShader *This,
+                        struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
+    HRESULT hr = D3D11DeviceChild_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
 
@@ -34,51 +34,35 @@ DXGIKeyedMutex_ctor( struct DXGIKeyedMutex *This,
 }
 
 void
-DXGIKeyedMutex_dtor( struct DXGIKeyedMutex *This )
+D3D11VertexShader_dtor( struct D3D11VertexShader *This )
 {
-    DXGIDeviceSubObject_dtor(&This->base);
+    if (This->cso) {
+        DELETE_PIPE_OBJECT_LOCKED(&This->base, delete_vs_state, This->cso);
+    }
+    D3D11DeviceChild_dtor(&This->base);
 }
 
-HRESULT WINAPI
-DXGIKeyedMutex_AcquireSync( struct DXGIKeyedMutex *This,
-                            UINT64 Key,
-                            DWORD dwMilliseconds )
-{
-    STUB_return(S_OK);
-}
-
-HRESULT WINAPI
-DXGIKeyedMutex_ReleaseSync( struct DXGIKeyedMutex *This,
-                            UINT64 Key )
-{
-    STUB_return(S_OK);
-}
-
-IDXGIKeyedMutexVtbl DXGIKeyedMutex_vtable = {
+ID3D11VertexShaderVtbl D3D11VertexShader_vtable = {
     (void *)D3D11Unknown_QueryInterface,
     (void *)D3D11Unknown_AddRef,
     (void *)D3D11Unknown_Release,
-    (void *)DXGIObject_SetPrivateData,
-    (void *)DXGIObject_SetPrivateDataInterface,
-    (void *)DXGIObject_GetPrivateData,
-    (void *)DXGIObject_GetParent,
-    (void *)DXGIDeviceSubObject_GetDevice,
-    (void *)DXGIKeyedMutex_AcquireSync,
-    (void *)DXGIKeyedMutex_ReleaseSync
+    (void *)D3D11DeviceChild_GetDevice,
+    (void *)D3D11DeviceChild_GetPrivateData,
+    (void *)D3D11DeviceChild_SetPrivateData,
+    (void *)D3D11DeviceChild_SetPrivateDataInterface
 };
 
-static const GUID *DXGIKeyedMutex_IIDs[] = {
-    &IID_IDXGIKeyedMutex,
-    &IID_IDXGIDeviceSubObject,
-    &IID_IDXGIObject,
+static const GUID *D3D11VertexShader_IIDs[] = {
+    &IID_ID3D11VertexShader,
+    &IID_ID3D11DeviceChild,
     &IID_IUnknown,
     NULL
 };
 
 HRESULT
-DXGIKeyedMutex_new( struct D3D11Device *pDevice,
-struct DXGIKeyedMutex **ppOut )
+D3D11VertexShader_new( struct D3D11Device *pDevice,
+struct D3D11VertexShader **ppOut )
 {
-    D3D11_NEW(DXGIKeyedMutex, ppOut, pDevice);
+    D3D11_NEW(D3D11VertexShader, ppOut, pDevice);
 }
 

@@ -11,6 +11,8 @@ struct D3D11Unknown
     int32_t refs; /* reference count */
     int32_t keep; /* internal reference count */
 
+    struct D3D11Unknown *container;
+
     const GUID **guids; /* for QueryInterface */
 
     void (*dtor)(void *); /* top-level destructor */
