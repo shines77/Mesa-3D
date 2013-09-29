@@ -24,7 +24,7 @@
 
 HRESULT
 DXGIDevice_ctor( struct DXGIDevice *This,
-struct D3D11UnknownParams *pParams)
+                 struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = DXGIObject_ctor(&This->base, pParams);
     if (FAILED(hr))
@@ -33,9 +33,21 @@ struct D3D11UnknownParams *pParams)
     return S_OK;
 }
 
+HRESULT WINAPI
+DXGIDevice_QueryInterface( struct DXGIDevice *This,
+                           REFIID riid,
+                           void *ppvObject )
+{
+    HRESULT hr = D3D11Unknown_QueryInterface((void *)This, riid, ppvObject);
+    if (FAILED(hr))
+        hr = D3D11Unknown_QueryInterface((void *)This->device, riid, ppvObject);
+    return hr;
+}
+
 void
 DXGIDevice_dtor( struct DXGIDevice *This )
 {
+    com_ref(&This->adapter, NULL);
     DXGIObject_dtor(&This->base);
 }
 
@@ -43,7 +55,9 @@ HRESULT WINAPI
 DXGIDevice_GetAdapter( struct DXGIDevice *This,
                        IDXGIAdapter **pAdapter )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pAdapter);
+    com_set(pAdapter, This->adapter);
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -54,28 +68,53 @@ DXGIDevice_CreateSurface( struct DXGIDevice *This,
                           DXGI_SHARED_RESOURCE *pSharedResource,
                           IDXGISurface **ppSurface )
 {
-    STUB_return(E_NOTIMPL);
+    struct DXGISurface *surf;
+    UINT i;
+
+    user_assert(NumSurfaces, DXGI_ERROR_INVALID_CALL);
+
+    for (i = NumSurfaces - 1; i >= 0; --i) {
+        DXGISurface_new(This, pDesc);
+    }
+    *ppSurface = (IDXGISurface *)surf;
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIDevice_QueryResourceResidency( struct DXGIDevice *This,
-                                   FunctionNoProto __in_ecount )
+                                   Unknown *const *ppResources,
+                                   DXGI_RESIDENCY *pResidencyStatus,
+                                   UINT NumResources )
 {
-    STUB_return(E_NOTIMPL);
+    unsigned i;
+
+    if (!NumResources)
+        return S_OK;
+    user_assert(ppResources && pResidencyStats, E_POINTER);
+
+    /* TODO: return actual status */
+    for (i = 0; i < NumResources; ++i)
+        pResidencyStatus[i] = DXGI_RESIDENCY_FULLY_RESIDENT;
+
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIDevice_SetGPUThreadPriority( struct DXGIDevice *This,
                                  INT Priority )
 {
-    STUB_return(E_NOTIMPL);
+    user_assert(Priority >= -7 && Priority <= +7, DXGI_ERROR_INVALID_CALL);
+    This->priority = priority;
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIDevice_GetGPUThreadPriority( struct DXGIDevice *This,
                                  INT *pPriority )
 {
-    STUB_return(E_NOTIMPL);
+    assert_pointer(pPriority);
+    *pPriority = This->priority;
+    return S_OK;
 }
 
 IDXGIDeviceVtbl DXGIDevice_vtable = {

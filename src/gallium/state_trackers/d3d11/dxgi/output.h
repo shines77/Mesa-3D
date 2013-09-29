@@ -7,6 +7,10 @@
 struct DXGIOutput
 {
     struct DXGIObject base;
+    struct DXGIAdapter *adapter;
+    struct DXGISurface *scanout;
+    DXGI_OUTPUT_DESC desc;
+    DXGI_GAMMA_CONTROL gamma;
 };
 static INLINE struct DXGIOutput *DXGIOutput(void *ptr)
 {
@@ -22,15 +26,15 @@ DXGIOutput_GetDesc( struct DXGIOutput *This,
 
 HRESULT WINAPI
 DXGIOutput_GetDisplayModeList( struct DXGIOutput *This,
-                               Int EnumFormat,
+                               DXGI_FORMAT EnumFormat,
                                UINT Flags,
                                UINT *pNumModes,
-                               FunctionProto __out_ecount_part_opt );
+                               DXGI_MODE_DESC *pDesc );
 
 HRESULT WINAPI
 DXGIOutput_FindClosestMatchingMode( struct DXGIOutput *This,
-                                    Int *pModeToMatch,
-                                    Int *pClosestMatch,
+                                    const DXGI_MODE_DESC *pModeToMatch,
+                                    DXGI_MODE_DESC *pClosestMatch,
                                     IUnknown *pConcernedDevice );
 
 HRESULT WINAPI
@@ -50,11 +54,11 @@ DXGIOutput_GetGammaControlCapabilities( struct DXGIOutput *This,
 
 HRESULT WINAPI
 DXGIOutput_SetGammaControl( struct DXGIOutput *This,
-                            Int *pArray );
+                            const DXGI_GAMMA_CONTROL *pArray );
 
 HRESULT WINAPI
 DXGIOutput_GetGammaControl( struct DXGIOutput *This,
-                            Int *pArray );
+                            DXGI_GAMMA_CONTROL *pArray );
 
 HRESULT WINAPI
 DXGIOutput_SetDisplaySurface( struct DXGIOutput *This,

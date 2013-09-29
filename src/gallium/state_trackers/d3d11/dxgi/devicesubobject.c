@@ -24,13 +24,9 @@
 
 HRESULT
 DXGIDeviceSubObject_ctor( struct DXGIDeviceSubObject *This,
-struct D3D11UnknownParams *pParams)
+                          struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = DXGIObject_ctor(&This->base, pParams);
-    if (FAILED(hr))
-        return hr;
-
-    return S_OK;
+    return DXGIObject_ctor(&This->base, pParams);
 }
 
 void
@@ -42,33 +38,7 @@ DXGIDeviceSubObject_dtor( struct DXGIDeviceSubObject *This )
 HRESULT WINAPI
 DXGIDeviceSubObject_GetDevice( struct DXGIDeviceSubObject *This,
                                REFIID riid,
-                               void **ppDevice )
+                               void **ppDev )
 {
-    STUB_return(E_NOTIMPL);
+    return D3D11Unknown_QueryInterface(This->base.base.container, riid, ppDev);
 }
-
-IDXGIDeviceSubObjectVtbl DXGIDeviceSubObject_vtable = {
-    (void *)D3D11Unknown_QueryInterface,
-    (void *)D3D11Unknown_AddRef,
-    (void *)D3D11Unknown_Release,
-    (void *)DXGIObject_SetPrivateData,
-    (void *)DXGIObject_SetPrivateDataInterface,
-    (void *)DXGIObject_GetPrivateData,
-    (void *)DXGIObject_GetParent,
-    (void *)DXGIDeviceSubObject_GetDevice
-};
-
-static const GUID *DXGIDeviceSubObject_IIDs[] = {
-    &IID_IDXGIDeviceSubObject,
-    &IID_IDXGIObject,
-    &IID_IUnknown,
-    NULL
-};
-
-HRESULT
-DXGIDeviceSubObject_new( struct D3D11Device *pDevice,
-struct DXGIDeviceSubObject **ppOut )
-{
-    D3D11_NEW(DXGIDeviceSubObject, ppOut, pDevice);
-}
-

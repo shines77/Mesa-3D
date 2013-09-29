@@ -7,10 +7,14 @@
 struct DXGIAdapter
 {
     struct DXGIObject base;
-    struct native_display *diplay;
     DXGI_ADAPTER_DESC1 desc;
+    struct native_display *diplay;
+    const struct native_config **configs;
     const struct native_connector **connectors;
-    char name[128];
+    struct DXGIOutput **output;
+    unsigned num_configs;
+    unsigned num_crtcs;
+    unsigned num_outputs;
 };
 static INLINE struct DXGIAdapter *DXGIAdapter(void *ptr)
 {

@@ -24,7 +24,7 @@
 
 HRESULT
 DXGIResource_ctor( struct DXGIResource *This,
-struct D3D11UnknownParams *pParams)
+                   struct D3D11UnknownParams *pParams )
 {
     HRESULT hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
     if (FAILED(hr))
@@ -43,28 +43,36 @@ HRESULT WINAPI
 DXGIResource_GetSharedHandle( struct DXGIResource *This,
                               HANDLE *pSharedHandle )
 {
-    STUB_return(E_NOTIMPL);
+    if (!This->handle)
+        return Error(DXGI_ERROR_NOT_FOUND, "Resource cannot be shared.\n");
+    *pSharedHandle = handle;
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIResource_GetUsage( struct DXGIResource *This,
                        DXGI_USAGE *pUsage )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pUsage);
+    *pUsage = This->usage;
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIResource_SetEvictionPriority( struct DXGIResource *This,
                                   UINT EvictionPriority )
 {
-    STUB_return(E_NOTIMPL);
+    This->priority = EvictionPriority;
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIResource_GetEvictionPriority( struct DXGIResource *This,
                                   UINT *pEvictionPriority )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pEvictionPriority);
+    *pEvictionPriority = This->priority;
+    return S_OK;
 }
 
 IDXGIResourceVtbl DXGIResource_vtable = {
@@ -92,7 +100,7 @@ static const GUID *DXGIResource_IIDs[] = {
 
 HRESULT
 DXGIResource_new( struct D3D11Device *pDevice,
-struct DXGIResource **ppOut )
+                  struct DXGIResource **ppOut )
 {
     D3D11_NEW(DXGIResource, ppOut, pDevice);
 }

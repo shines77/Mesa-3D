@@ -24,11 +24,24 @@
 
 HRESULT
 DXGISwapChain_ctor( struct DXGISwapChain *This,
-struct D3D11UnknownParams *pParams)
+                    struct D3D11UnknownParams *pParams,
+                    const DXGI_SWAPCHAIN_DESC *pDesc )
 {
-    HRESULT hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
+    HRESULT hr;
+
+    hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
     if (FAILED(hr))
         return hr;
+
+    hr = DXGISwapChain_ResizeBuffers(This,
+                                     This->desc.BufferCount,
+                                     This->desc.BufferDesc.Width,
+                                     This->desc.BufferDesc.Height,
+                                     This->desc.BufferDesc.Format,
+                                     This->desc.Flags);
+    if (FAILED(hr))
+        return hr;
+    This->desc = *pDesc;
 
     return S_OK;
 }
@@ -36,6 +49,13 @@ struct D3D11UnknownParams *pParams)
 void
 DXGISwapChain_dtor( struct DXGISwapChain *This )
 {
+    unsigned i;
+
+    for (i = 0; i < This->num_buffers; ++i)
+        com_ref(&This->buffer[i], NULL);
+
+    com_ref(&This->output, NULL);
+
     DXGIDeviceSubObject_dtor(&This->base);
 }
 
@@ -44,6 +64,27 @@ DXGISwapChain_Present( struct DXGISwapChain *This,
                        UINT SyncInterval,
                        UINT Flags )
 {
+    struct pipe_context *pipe;
+
+    {
+        struct pipe_blit_info blit;
+
+        blit.dst.resource = ;
+        blit.dst.level = ;
+        blit.dst.format = ;
+        u_box_2d(x, y, w, h, &blit.dst.box);
+
+        blit.src.resource = ;
+        blit.src.level = ;
+        blit.src.format = ;
+        u_box_2d(x, y, w, h, &blit.src.box);
+
+        blit.mask = PIPE_MASK_RGBA;
+        blit.filter = PIPE_TEX_FILTER_LINEAR;
+        blit.scissor_enable = FALSE;
+        blit.alpha_blend = FALSE;
+    }
+
     STUB_return(E_NOTIMPL);
 }
 
@@ -53,7 +94,9 @@ DXGISwapChain_GetBuffer( struct DXGISwapChain *This,
                          REFIID riid,
                          void **ppSurface )
 {
-    STUB_return(E_NOTIMPL);
+    user_assert(Buffer < This->num_buffers, DXGI_ERROR_INVALID_CALL);
+
+    return IUnknown_QueryInterface(This->buffer[Buffer], riid, ppSurface);
 }
 
 HRESULT WINAPI
@@ -69,14 +112,20 @@ DXGISwapChain_GetFullscreenState( struct DXGISwapChain *This,
                                   BOOL *pFullscreen,
                                   IDXGIOutput **ppTarget )
 {
-    STUB_return(E_NOTIMPL);
+    if (pFullscreen)
+        *pFullscreen = This->fullscreen;
+    if (ppTarget)
+        com_ref(ppTarget, This->target);
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGISwapChain_GetDesc( struct DXGISwapChain *This,
                        DXGI_SWAP_CHAIN_DESC *pDesc )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pDesc);
+    *pDesc = This->desc;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -84,10 +133,61 @@ DXGISwapChain_ResizeBuffers( struct DXGISwapChain *This,
                              UINT BufferCount,
                              UINT Width,
                              UINT Height,
-                             Int NewFormat,
+                             DXGI_FORMAT NewFormat,
                              UINT SwapChainFlags )
 {
+    unsigned i;
+
     STUB_return(E_NOTIMPL);
+
+    for (i = 0; i < This->desc.BufferCount; ++i)
+        if (This->buffer[i]->base.base.ref)
+            return Error(DXGI_ERROR_INVALID_CALL, "Buffer still referenced.");
+
+    user_assert(BufferCount <= DXGI_MAX_SWAP_CHAIN_BUFFERS,
+                DXGI_ERROR_INVALID_CALL);
+    if (!BufferCount)
+        BufferCount = This->desc.BufferCount;
+
+    if (!Width || !Height) {
+        UINT TargetWidth, TargetHeight;
+        if (!Width)
+            Width = TargetWidth;
+        if (!Height)
+            Height = TargetHeight;
+    }
+
+    if (NewFormat == DXGI_FORMAT_UNKNOWN)
+        NewFormat = This->desc.BufferDesc.Format;
+
+    for (i = 0; i < BufferCount; ++i) {
+        if (This->buffer[i]) {
+            struct pipe_resource templ;
+            templ.target = PIPE_TEXTURE_2D;
+            templ.format = dxgi_to_pipe_format(NewFormat);
+            templ.width0 = Width;
+            templ.height0 = Height;
+            templ.depth0 = 1;
+            templ.nr_samples = 0;
+            templ.last_level = 0;
+            templ.array_size = 1;
+            templ.usage = PIPE_USAGE_DEFAULT;
+            templ.bind =
+                PIPE_BIND_SAMPLER_VIEW |
+                PIPE_BIND_RENDER_TARGET;
+        } else {
+            hr = DXGISurface_new(device, &This->buffer[i]);
+            if (FAILED(hr))
+                return Error(hr, "Failed to create DXGISurface.\n");
+        }
+    }
+
+    This->desc.BufferDesc.Width = Width;
+    This->desc.BufferDesc.Height = Height;
+    This->desc.BufferDesc.Format = NewFormat;
+    This->desc.Flags = SwapChainFlags;
+
+    return Success(S_OK);
 }
 
 HRESULT WINAPI
@@ -101,21 +201,31 @@ HRESULT WINAPI
 DXGISwapChain_GetContainingOutput( struct DXGISwapChain *This,
                                    IDXGIOutput **ppOutput )
 {
-    STUB_return(E_NOTIMPL);
+    assert(ppOutput);
+    com_set(ppOutput, This->output);
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGISwapChain_GetFrameStatistics( struct DXGISwapChain *This,
                                   DXGI_FRAME_STATISTICS *pStats )
 {
-    STUB_return(E_NOTIMPL);
+    memset(pStats, 0, sizeof(*pStats));
+
+    pStats->PresentCount = This->present_count;
+    pStats->PresentRefreshCount = This->present_count;
+    pStats->SyncRefreshCount = This->present_count;
+
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGISwapChain_GetLastPresentCount( struct DXGISwapChain *This,
                                    UINT *pLastPresentCount )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pLastPresentCount);
+    *pLastPresentCount = This->present_count;
+    return S_OK;
 }
 
 IDXGISwapChainVtbl DXGISwapChain_vtable = {
@@ -149,8 +259,9 @@ static const GUID *DXGISwapChain_IIDs[] = {
 
 HRESULT
 DXGISwapChain_new( struct D3D11Device *pDevice,
-struct DXGISwapChain **ppOut )
+                   const DXGI_SWAPCHAIN_DESC *pDesc,
+                   struct DXGISwapChain **ppOut )
 {
-    D3D11_NEW(DXGISwapChain, ppOut, pDevice);
+    return DXGI_NEW(DXGISwapChain, ppOut, pDevice, pDesc);
 }
 

@@ -7,6 +7,9 @@
 struct DXGIResource
 {
     struct DXGIDeviceSubObject base;
+    HANDLE handle;
+    UINT priority;
+    DXGI_USAGE usage;
 };
 static INLINE struct DXGIResource *DXGIResource(void *ptr)
 {

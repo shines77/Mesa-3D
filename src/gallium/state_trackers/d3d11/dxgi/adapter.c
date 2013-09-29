@@ -64,15 +64,27 @@ DXGIAdapter_ctor( struct DXGIAdapter *This,
     desc.DedicatedSystemMemory = 0;
     desc.SharedSystemMemory = 1ULL << 32;
 
-    *(void **)&desc.AdapterLuid = dpy; /* XXX */
+    *(void **)&desc.AdapterLuid = dpy; /* TODO: real LUID */
 
     This->configs = display->get_configs(display, &This->num_configs);
 
-    for (i = 0; i < This->num_configs; ++i) {
-    }
-
     if (display->modeset) {
+        This->connectors = display->modeset->get_connectors(
+            display, &This->num_outputs, &This->num_crtcs);
+        if (!This->connectors) {
+            This->num_outputs = 0;
+        } else
+        if (!This->num_outputs) {
+            FREE(This->connectors);
+            This->connectors = NULL;
+        }
     }
+    if (!This->num_outputs)
+        This->num_outputs = 1;
+
+    This->outputs = CALLOC(This->num_outputs, sizeof(This->output[0]));
+    if (!This->outputs)
+        return Error(E_OUTOFMEMORY, "");
 
     return S_OK;
 }
@@ -81,9 +93,10 @@ void
 DXGIAdapter_dtor( struct DXGIAdapter *This )
 {
     if (This->display) {
-        This->display->destroy(This->display);
         FREE(This->configs);
         FREE(This->connectors);
+        FREE(This->outputs);
+        This->display->destroy(This->display);
     }
     DXGIObject_dtor(&This->base);
 }
@@ -94,8 +107,21 @@ DXGIAdapter_EnumOutputs( struct DXGIAdapter *This,
                          IDXGIOutput **ppOutput )
 {
     if (Output >= This->num_outputs)
-        return Error(DXGI_ERROR_NOT_FOUND, "Output ID out of range.\n");
-    STUB_return(E_NOTIMPL);
+        return Error(DXGI_ERROR_NOT_FOUND, "Output index out of range.\n");
+
+    if (!This->output[Output]) {
+        if (This->connectors) {
+            char name[32];
+            snprintf(name, sizeof(name), "output %u", Output);
+
+            DXGIOutput_new(This, name, This->connectors[Output],
+                           &This->output[Output]);
+        } else {
+            DXGIOutput_new(This, "unique output", NULL, &This->output[0]);
+        }
+    }
+    com_set(ppOutput, This->output[Output]);
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -103,7 +129,7 @@ DXGIAdapter_GetDesc( struct DXGIAdapter *This,
                      DXGI_ADAPTER_DESC *pDesc )
 {
     assert(pDesc);
-    *pDesc = This->desc;
+    memcpy(pDesc, &This->desc, sizeof(*pDesc));
     return S_OK;
 }
 
@@ -112,15 +138,17 @@ DXGIAdapter_CheckInterfaceSupport( struct DXGIAdapter *This,
                                    REFGUID InterfaceName,
                                    LARGE_INTEGER *pUMDVersion )
 {
-    if (InterfaceName == IID_ID3D11Device) {
+    if (GUID_equal(InterfaceName, IID_ID3D11Device) ||
+        GUID_equal(InterfaceName, IID_ID3D11Device2) ||
+        GUID_equal(InterfaceName, IID_ID3D11Device2)) {
         /* This value stems from Win7 with Catalyst 10.8, meaning unclear. */
         pUMDVersion->QuadPart = 0x00080011000a0411ULL;
     } else
-    if (InterfaceName == IID_ID3D10Device1 ||
-        InterfaceName == IID_ID3D11Device) {
-        return Error(DXGI_ERROR_UNSUPPORTED, "No one uses D3D10 !\n");
+    if (GUID_equal(InterfaceName, IID_ID3D10Device1) ||
+        GUID_equal(InterfaceName, IID_ID3D11Device)) {
+        return Error(DXGI_ERROR_UNSUPPORTED, "You don't want to use D3D10 !\n");
     } else {
-        return Error(DXGI_ERROR_UNSUPPORTED, "Unknown interface.\n");
+        return Error(DXGI_ERROR_UNSUPPORTED, "Unsupported interface.\n");
     }
     return S_OK;
 }

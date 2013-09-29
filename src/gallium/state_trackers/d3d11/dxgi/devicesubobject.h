@@ -14,7 +14,10 @@ static INLINE struct DXGIDeviceSubObject *DXGIDeviceSubObject(void *ptr)
 }
 
 HRESULT
-DXGIDeviceSubObject_new( struct D3D11Device *, struct DXGIDeviceSubObject **ppOut );
+DXGIDeviceSubObject_ctor( struct DXGIDeviceSubObject *,
+                          struct D3D11UnknownParams * );
+void
+DXGIDeviceSubObject_dtor( struct DXGIDeviceSubObject * );
 
 HRESULT WINAPI
 DXGIDeviceSubObject_GetDevice( struct DXGIDeviceSubObject *This,

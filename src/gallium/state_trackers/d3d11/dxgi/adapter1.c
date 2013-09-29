@@ -24,13 +24,9 @@
 
 HRESULT
 DXGIAdapter1_ctor( struct DXGIAdapter1 *This,
-struct D3D11UnknownParams *pParams)
+                   struct D3D11UnknownParams *pParams )
 {
-    HRESULT hr = DXGIAdapter_ctor(&This->base, pParams);
-    if (FAILED(hr))
-        return hr;
-
-    return S_OK;
+    return DXGIAdapter_ctor(&This->base, pParams);
 }
 
 void
@@ -43,7 +39,9 @@ HRESULT WINAPI
 DXGIAdapter1_GetDesc1( struct DXGIAdapter1 *This,
                        DXGI_ADAPTER_DESC1 *pDesc )
 {
-    STUB_return(E_NOTIMPL);
+    assert(pDesc);
+    memcpy(pDesc, &This->desc, sizeof(*pDesc));
+    return S_OK;
 }
 
 IDXGIAdapter1Vtbl DXGIAdapter1_vtable = {
@@ -70,7 +68,7 @@ static const GUID *DXGIAdapter1_IIDs[] = {
 
 HRESULT
 DXGIAdapter1_new( struct D3D11Device *pDevice,
-struct DXGIAdapter1 **ppOut )
+                  struct DXGIAdapter1 **ppOut )
 {
     D3D11_NEW(DXGIAdapter1, ppOut, pDevice);
 }

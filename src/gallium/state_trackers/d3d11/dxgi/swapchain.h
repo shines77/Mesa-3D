@@ -7,6 +7,13 @@
 struct DXGISwapChain
 {
     struct DXGIDeviceSubObject base;
+    DXGI_SWAPCHAIN_DESC desc;
+
+    struct DXGISurface *buffer[DXGI_MAX_SWAP_CHAIN_BUFFERS];
+    UINT num_buffers;
+
+    struct DXGIOutput *output;
+    UINT present_count;
 };
 static INLINE struct DXGISwapChain *DXGISwapChain(void *ptr)
 {
@@ -14,7 +21,9 @@ static INLINE struct DXGISwapChain *DXGISwapChain(void *ptr)
 }
 
 HRESULT
-DXGISwapChain_new( struct D3D11Device *, struct DXGISwapChain **ppOut );
+DXGISwapChain_new( struct DXGIDevice *pDevice,
+                   const DXGI_SWAPCHAIN_DESC *pDesc,
+                   struct DXGISwapChain **ppOut );
 
 HRESULT WINAPI
 DXGISwapChain_Present( struct DXGISwapChain *This,
@@ -46,7 +55,7 @@ DXGISwapChain_ResizeBuffers( struct DXGISwapChain *This,
                              UINT BufferCount,
                              UINT Width,
                              UINT Height,
-                             Int NewFormat,
+                             DXGI_FORMAT NewFormat,
                              UINT SwapChainFlags );
 
 HRESULT WINAPI

@@ -37,6 +37,8 @@ struct D3D11Device
     struct D3D11PrivateData pdata;
 
     D3D_FEATURE_LEVEL feature_level;
+    
+    struct DXGIDevice *device;
 };
 static INLINE struct D3D11Device *D3D11Device(void *ptr)
 {

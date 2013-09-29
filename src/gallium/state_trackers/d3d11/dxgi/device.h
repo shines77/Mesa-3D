@@ -7,6 +7,9 @@
 struct DXGIDevice
 {
     struct DXGIObject base;
+    struct DXGIAdapter *adapter;
+    struct D3D11Device *device;
+    INT priority;
 };
 static INLINE struct DXGIDevice *DXGIDevice(void *ptr)
 {
@@ -30,7 +33,9 @@ DXGIDevice_CreateSurface( struct DXGIDevice *This,
 
 HRESULT WINAPI
 DXGIDevice_QueryResourceResidency( struct DXGIDevice *This,
-                                   FunctionNoProto __in_ecount );
+                                   IUnknown *const *ppResources,
+                                   DXGI_RESIDENCY *pResidencyStatus,
+                                   UINT NumResources );
 
 HRESULT WINAPI
 DXGIDevice_SetGPUThreadPriority( struct DXGIDevice *This,
