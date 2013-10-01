@@ -7,6 +7,7 @@
 struct DXGIDeviceSubObject
 {
     struct DXGIObject base;
+    struct DXGIDevice *device;
 };
 static INLINE struct DXGIDeviceSubObject *DXGIDeviceSubObject(void *ptr)
 {
@@ -15,7 +16,8 @@ static INLINE struct DXGIDeviceSubObject *DXGIDeviceSubObject(void *ptr)
 
 HRESULT
 DXGIDeviceSubObject_ctor( struct DXGIDeviceSubObject *,
-                          struct D3D11UnknownParams * );
+                          struct D3D11UnknownParams *,
+                          struct DXGIDevice * );
 void
 DXGIDeviceSubObject_dtor( struct DXGIDeviceSubObject * );
 

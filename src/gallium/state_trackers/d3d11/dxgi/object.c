@@ -24,10 +24,8 @@
 
 HRESULT
 DXGIObject_ctor( struct DXGIObject *This,
-                 struct D3D11UnknownParams *pParams,
-                 struct D3D11Unknown *parent )
+                 struct D3D11UnknownParams *pParams )
 {
-    com_set(&This->parent, parent);
     return D3D11Unknown_ctor(&This->base, pParams);
 }
 
@@ -35,7 +33,6 @@ void
 DXGIObject_dtor( struct DXGIObject *This )
 {
     D3D11PrivateData_Destroy(&This->pdata);
-    com_ref(&This->parent, NULL);
     D3D11Unknown_dtor(&This->base);
 }
 
@@ -70,5 +67,5 @@ DXGIObject_GetParent( struct DXGIObject *This,
                       REFIID riid,
                       void **ppParent )
 {
-    return D3DUnknown_QueryInterface(This->parent, riid, ppParent);
+    return D3D11Unknown_QueryInterface(This->base.container, riid, ppParent);
 }

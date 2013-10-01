@@ -24,14 +24,17 @@
 
 HRESULT
 DXGIDeviceSubObject_ctor( struct DXGIDeviceSubObject *This,
-                          struct D3D11UnknownParams *pParams )
+                          struct D3D11UnknownParams *pParams,
+                          struct DXGIDevice *pDevice )
 {
+    com_set(&This->device, pDevice);
     return DXGIObject_ctor(&This->base, pParams);
 }
 
 void
 DXGIDeviceSubObject_dtor( struct DXGIDeviceSubObject *This )
 {
+    com_ref(&This->device, NULL);
     DXGIObject_dtor(&This->base);
 }
 
@@ -40,5 +43,5 @@ DXGIDeviceSubObject_GetDevice( struct DXGIDeviceSubObject *This,
                                REFIID riid,
                                void **ppDev )
 {
-    return D3D11Unknown_QueryInterface(This->base.base.container, riid, ppDev);
+    return D3D11Unknown_QueryInterface(This->device, riid, ppDev);
 }

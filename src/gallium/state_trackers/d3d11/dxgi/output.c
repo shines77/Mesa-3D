@@ -96,7 +96,33 @@ DXGIOutput_GetDisplayModeList( struct DXGIOutput *This,
                                UINT *pNumModes,
                                DXGI_MODE_DESC *pDesc )
 {
-    STUB_return(E_NOTIMPL);
+    unsigned i;
+    unsigned n = 0;
+
+    user_assert(pNumModes, DXGI_ERROR_INVALID_CALL);
+
+    if (!pDesc) {
+        for (i = 0; i < This->num_modes; ++i) {
+            if (This->modes[i].Format == EnumFormat)
+                ++n;
+        }
+        *pNumModes = n;
+        return S_OK;
+    }
+
+    for (i = 0; i < This->num_modes && n < *pNumModes; ++i) {
+        if (This->modes[i].Format != EnumFormat)
+            continue;
+        pDesc[n].Width = This->modes[i]->width;
+        pDesc[n].Height = This->modes[i]->width;
+        pDesc[n].RefreshRate.Numerator = This->modes[i]->refresh_rate;
+        pDesc[n].RefreshRate.Denominator = 1;
+        pDesc[n].Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+        pDesc[n].ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+        ++n;
+    }
+    *pNumModes = n;
+    return S_OK;
 }
 
 HRESULT WINAPI
@@ -105,13 +131,50 @@ DXGIOutput_FindClosestMatchingMode( struct DXGIOutput *This,
                                     DXGI_MODE_DESC *pClosestMatch,
                                     IUnknown *pConcernedDevice )
 {
-    STUB_return(E_NOTIMPL);
+    float close = 1e9f;
+    unsigned i;
+    unsigned m = 0;
+
+    user_assert(pModeToMatch && pClosestMatch, E_POINTER);
+    user_assert(pModeToMatch->Width != 0 ||
+                pModeToMatch->Height == 0, DXGI_ERROR_INVALID_CALL);
+    user_assert(pConcernedDevice || pModeToMatch->Format != DXGI_FORMAT_UNKNOWN,
+                DXGI_ERROR_INVALID_CALL);
+    user_assert(pModeToMatch->RefreshRate.Denominator != 0 ||
+                pModeToMatch->RefreshRate.Numerator == 0,
+                DXGI_ERROR_INVALID_CALL);
+
+    for (i = 0; i < This->num_modes; ++i) {
+        float f, r;
+        if (This->modes[i]->Format != pModeToMatch->Format)
+            continue;
+        f  = pModeToMatch->RefreshRate.Numerator;
+        f /= pModeToMatch->RefreshRate.Denominator;
+        f /= This->modes[i]->refresh_rate;
+        f *= pModeToMatch->Width - This->modes[i]->width;
+        f *= pModeToMatch->Height - This->modes[i]->height;
+
+        if (close > fabsf(f)) {
+            m = i;
+            close = fabsf(f);
+        }
+    }
+
+    pClosestMatch->Width = This->modes[m]->width;
+    pClosestMatch->Height = This->modes[m]->height;
+    pClosestMatch->RefreshRate.Numerator = This->modes[m].refresh_rate;
+    pClosestMatch->RefreshRate.Denominator = 1;
+    pClosestMatch->Format = This->modes[m]->Format;
+    pClosestMatch->Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    pClosestMatch->ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+
+    return S_OK;
 }
 
 HRESULT WINAPI
 DXGIOutput_WaitForVBlank( struct DXGIOutput *This )
 {
-    STUB_return(E_NOTIMPL);
+    STUB_return(S_OK);
 }
 
 HRESULT WINAPI
@@ -207,9 +270,9 @@ static const GUID *DXGIOutput_IIDs[] = {
 };
 
 HRESULT
-DXGIOutput_new( struct D3D11Device *pDevice,
-struct DXGIOutput **ppOut )
+DXGIOutput_new( struct DXGIAdapter *pAdapter,
+                struct DXGIOutput **ppOut )
 {
-    D3D11_NEW(DXGIOutput, ppOut, pDevice);
+    D3D11_NEW_CHILD(DXGIOutput, ppOut, pAdapter);
 }
 

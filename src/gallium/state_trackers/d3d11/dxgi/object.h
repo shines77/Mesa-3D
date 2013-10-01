@@ -8,7 +8,6 @@
 struct DXGIObject
 {
     struct D3D11Unknown base;
-    struct D3D11Unknown *parent;
     struct D3D11PrivateData pdata;
 };
 static INLINE struct DXGIObject *DXGIObject(void *ptr)
@@ -18,8 +17,7 @@ static INLINE struct DXGIObject *DXGIObject(void *ptr)
 
 HRESULT
 DXGIObject_ctor( struct DXGIObject *This,
-                 struct D3D11UnknownParams *pParams,
-                 struct D3D11Unknown *pParent )
+                 struct D3D11UnknownParams *pParams )
 
 void
 DXGIObject_dtor( struct DXGIObject *This );

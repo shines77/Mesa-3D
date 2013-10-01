@@ -18,7 +18,10 @@ static INLINE struct DXGIOutput *DXGIOutput(void *ptr)
 }
 
 HRESULT
-DXGIOutput_new( struct D3D11Device *, struct DXGIOutput **ppOut );
+DXGIOutput_new( struct DXGIAdapter *,
+                UINT ID,
+                struct native_connector *pConnector,
+                struct DXGIOutput **ppOut );
 
 HRESULT WINAPI
 DXGIOutput_GetDesc( struct DXGIOutput *This,

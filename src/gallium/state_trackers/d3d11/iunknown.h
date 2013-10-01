@@ -50,6 +50,39 @@ D3D11Unknown_Release(struct D3D11Unknown *);
 
 
 static INLINE void
+D3D11Unknown_Destroy( struct D3D11Unknown *This )
+{
+    assert(!(This->refs | This->keep));
+    This->dtor(This);
+}
+
+static INLINE int32_t
+D3D11Unknown_Get( struct D3D11Unknown *This )
+{
+    int32_t k = p_atomic_inc_return(&This->keep);
+    assert(k);
+    if (k == 1 && This->container)
+        D3D11Unknown_Get(This->container);
+    return k;
+}
+
+static INLINE int32_t
+D3D11Unknown_Put( struct D3D11Unknown *This )
+{
+    int32_t k = p_atomic_dec_return(&This->keep);
+    if (!k) {
+        if (This->container) {
+            D3D11Unknown_Put(This->container);
+        } else
+        if (This->refs == 0) {
+            This->dtor(This);
+        }
+    }
+    return k;
+}
+
+
+static INLINE void
 com_reference(struct D3D11Unknown **ref, struct D3D11Unknown *obj)
 {
     if (*ref != obj) {

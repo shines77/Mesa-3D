@@ -9,6 +9,7 @@ struct DXGISurface
     struct DXGIDeviceSubObject base;
     DXGI_SURFACE_DESC desc;
     struct D3D11Texture2D *tex;
+    struct native_surface *sys;
 };
 static INLINE struct DXGISurface *DXGISurface(void *ptr)
 {

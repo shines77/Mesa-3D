@@ -25,11 +25,12 @@
 HRESULT
 DXGISwapChain_ctor( struct DXGISwapChain *This,
                     struct D3D11UnknownParams *pParams,
+                    struct DXGIDevice *pDevice,
                     const DXGI_SWAPCHAIN_DESC *pDesc )
 {
     HRESULT hr;
 
-    hr = DXGIDeviceSubObject_ctor(&This->base, pParams);
+    hr = DXGIDeviceSubObject_ctor(&This->base, pParams, pDevice);
     if (FAILED(hr))
         return hr;
 
@@ -64,7 +65,11 @@ DXGISwapChain_Present( struct DXGISwapChain *This,
                        UINT SyncInterval,
                        UINT Flags )
 {
+    struct native_present_control ctrl;
+    HRESULT hr;
     struct pipe_context *pipe;
+
+    STUB_return(E_NOTIMPL);
 
     {
         struct pipe_blit_info blit;
@@ -85,7 +90,20 @@ DXGISwapChain_Present( struct DXGISwapChain *This,
         blit.alpha_blend = FALSE;
     }
 
-    STUB_return(E_NOTIMPL);
+    ctrl.natt = ;
+    ctrl.preserve = x != DXGI_SWAP_EFFECT_DISCARD;
+    ctrl.swap_interval = SyncInterval;
+    ctrl.premultiplied_alpha = TRUE;
+    ctrl.num_rects = 0;
+    ctrl.rects = NULL;
+
+    if (Flags & DXGI_PRESENT_TEST)
+        return S_OK;
+    hr = surf->present(surf, &ctrl) ? S_OK : E_FAIL;
+
+    if (FAILED(hr))
+        Error(hr, "Present failed.\n");
+    return hr;
 }
 
 HRESULT WINAPI
